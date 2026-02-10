@@ -1,0 +1,8 @@
+.git
+.github
+.tmp
+.xmake
+lunet
+build
+*.sqlite3
+nginx/certs

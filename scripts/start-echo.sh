@@ -8,7 +8,7 @@ source "$ROOT_DIR/scripts/lunet-env.sh"
 
 export DMZ_HOST=${DMZ_HOST:-127.0.0.1}
 export BACKFLOW_PORT=${BACKFLOW_PORT:-9000}
-export SERVICE_NAME=${SERVICE_NAME:-conduit}
+export SERVICE_NAME=${SERVICE_NAME:-echo}
 
 detect_cores() {
     getconf _NPROCESSORS_ONLN 2>/dev/null || \
@@ -23,7 +23,4 @@ if [ "$DEFAULT_WORKERS" -lt 2 ]; then
 fi
 export WORKERS=${WORKERS:-$DEFAULT_WORKERS}
 
-# Database
-export DB_PATH=${DB_PATH:-.tmp/conduit.sqlite3}
-
-"$LUNET_BIN" "$ROOT_DIR/app/internal/main.lua"
+"$LUNET_BIN" "$ROOT_DIR/app/echo/main.lua"

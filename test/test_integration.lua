@@ -99,7 +99,9 @@ lunet.spawn(function()
     check("tcp listener", tcp_listener ~= nil, tostring(terr))
     if not tcp_listener then os.exit(1) end
 
-    broker.accept_workers(tcp_listener)
+    lunet.spawn(function()
+        broker.accept_workers(tcp_listener)
+    end)
     ingress.accept_http(unix_listener, broker, "conduit")
 
     -- 3. Connect a worker (simulating the Conduit worker connecting OUT)

@@ -1,0 +1,109 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  LUNET_VERSION: v0.1.0
+
+jobs:
+  package:
+    name: package-${{ matrix.name }}
+    runs-on: ${{ matrix.runs_on }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-amd64
+            runs_on: ubuntu-24.04
+            archive: lunet-backproxy-linux-amd64.tar.gz
+          - name: linux-arm64
+            runs_on: ubuntu-24.04-arm
+            archive: lunet-backproxy-linux-arm64.tar.gz
+          - name: macos-arm64
+            runs_on: macos-latest
+            archive: lunet-backproxy-macos-arm64.tar.gz
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: xmake-io/github-action-setup-xmake@v1
+        with:
+          xmake-version: latest
+
+      - name: Install Dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            pkg-config \
+            libuv1-dev \
+            luajit \
+            libluajit-5.1-dev \
+            sqlite3 \
+            curl \
+            git \
+            jq
+
+      - name: Install Dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install libuv luajit sqlite coreutils git jq
+
+      - name: Prepare Runtime
+        run: |
+          xmake setup-lunet
+
+      - name: Run Tests
+        run: |
+          xmake test
+
+      - name: Package Artifact
+        run: |
+          mkdir -p dist/bin dist/lib
+
+          RUNTIME_DIR=".tmp/runtime/lunet-${LUNET_VERSION}"
+          cp "$RUNTIME_DIR/bin/lunet" dist/bin/lunet
+          cp "$RUNTIME_DIR/lib/lunet.so" dist/lib/lunet.so
+          mkdir -p dist/lib/lunet
+          cp "$RUNTIME_DIR/lib/lunet/sqlite3.so" dist/lib/lunet/sqlite3.so
+
+          cp -R app dist/app
+          cp -R scripts dist/scripts
+          cp README.md dist/README.md
+          cp AGENTS.md dist/AGENTS.md
+          cp xmake.lua dist/xmake.lua
+          cp docker-compose.yml dist/docker-compose.yml
+          cp Dockerfile dist/Dockerfile
+          cp .dockerignore dist/.dockerignore
+
+          tar -czf "${{ matrix.archive }}" -C dist .
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.archive }}
+          path: ${{ matrix.archive }}
+
+  publish:
+    name: publish-release
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [package]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Publish Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/**/*.tar.gz

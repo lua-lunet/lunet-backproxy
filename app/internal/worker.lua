@@ -7,8 +7,13 @@ local request_handler = require("app.conduit.request_handler")
 
 local M = {}
 
-local function safe_handle(raw)
-    local ok, res = pcall(request_handler.handle, raw)
+local function conduit_handler(raw)
+    return request_handler.handle(raw)
+end
+
+local function safe_handle(raw, handler)
+    local h = handler or conduit_handler
+    local ok, res = pcall(h, raw)
     if ok and type(res) == "string" and #res > 0 then
         return res
     end
@@ -17,7 +22,7 @@ local function safe_handle(raw)
         "internal handler error\n")
 end
 
-function M.run_one_worker(dmz_host, dmz_port, service_name)
+function M.run_one_worker(dmz_host, dmz_port, service_name, handler)
     local conn, err = socket.connect(dmz_host, dmz_port)
     if not conn then
         return nil, "connect failed: " .. tostring(err)
@@ -56,7 +61,7 @@ function M.run_one_worker(dmz_host, dmz_port, service_name)
         end
 
         log.info("WORKER", "handling REQ id=%s bytes=%d", fr.id, #fr.payload)
-        local resp_payload = safe_handle(fr.payload)
+        local resp_payload = safe_handle(fr.payload, handler)
         local ok2, werr2 = frame.write_frame(conn, "RES", fr.id, resp_payload)
         if not ok2 then
             log.warn("WORKER", "write RES failed: %s", tostring(werr2))

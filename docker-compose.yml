@@ -1,0 +1,74 @@
+services:
+  dmz:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: lunet-backproxy:local
+    container_name: lunet-backproxy-dmz
+    command: ["bash", "-lc", "scripts/docker/run-dmz.sh"]
+    environment:
+      HTTP_HOST: "0.0.0.0"
+      HTTP_PORT: "8080"
+      BACKFLOW_HOST: "0.0.0.0"
+      BACKFLOW_PORT: "9000"
+      SERVICE_NAME: "${SERVICE_NAME:-echo}"
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf --max-time 3 http://127.0.0.1:8080/health >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+    networks:
+      - edge
+      - secure
+
+  internal-echo:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: lunet-backproxy:local
+    container_name: lunet-backproxy-internal-echo
+    command: ["bash", "-lc", "scripts/docker/run-echo.sh"]
+    environment:
+      DMZ_HOST: "dmz"
+      BACKFLOW_PORT: "9000"
+      SERVICE_NAME: "echo"
+      WORKERS: "${WORKERS:-2}"
+    depends_on:
+      dmz:
+        condition: service_healthy
+    profiles: ["echo"]
+    networks:
+      - secure
+
+  internal-conduit:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: lunet-backproxy:local
+    container_name: lunet-backproxy-internal-conduit
+    command: ["bash", "-lc", "scripts/docker/run-internal.sh"]
+    environment:
+      DMZ_HOST: "dmz"
+      BACKFLOW_PORT: "9000"
+      SERVICE_NAME: "conduit"
+      WORKERS: "${WORKERS:-2}"
+      DB_PATH: "/opt/lunet-backproxy/.tmp/conduit.sqlite3"
+    depends_on:
+      dmz:
+        condition: service_healthy
+    profiles: ["conduit"]
+    networks:
+      - secure
+    volumes:
+      - conduit-data:/opt/lunet-backproxy/.tmp
+
+networks:
+  edge:
+    driver: bridge
+  secure:
+    driver: bridge
+
+volumes:
+  conduit-data:

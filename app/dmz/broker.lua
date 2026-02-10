@@ -7,6 +7,8 @@ local BufferedReader = require("app.common.buffered_reader")
 local M = {}
 
 local pools = {}
+local idle_wait_ms = tonumber(os.getenv("BROKER_IDLE_WAIT_MS") or "10")
+local idle_wait_attempts = tonumber(os.getenv("BROKER_IDLE_WAIT_ATTEMPTS") or "100")
 
 local function add_worker(service, client, reader)
     pools[service] = pools[service] or {}
@@ -42,11 +44,18 @@ end
 
 function M.has_workers(service)
     local p = pools[service]
-    if not p then return false end
-    for _, w in ipairs(p) do
-        if not w.busy then return true end
+    return p ~= nil and #p > 0
+end
+
+local function wait_for_idle(service)
+    for _ = 1, idle_wait_attempts do
+        local w = pick_idle(service)
+        if w then
+            return w
+        end
+        lunet.sleep(idle_wait_ms)
     end
-    return false
+    return nil
 end
 
 function M.accept_workers(tcp_listener)
@@ -87,7 +96,7 @@ end
 
 function M.dispatch(service, req_id, raw_http_request)
     for attempt = 1, 3 do
-        local w = pick_idle(service)
+        local w = wait_for_idle(service)
         if not w then
             return nil, "no idle worker for service=" .. service
         end

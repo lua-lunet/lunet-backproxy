@@ -1,180 +1,184 @@
-# Lunet Backflow Proxy
+# Lunet Backproxy
 
-## Problem
+Secure reverse outbound proxy for DMZ topologies.
 
-A compromised host in a DMZ can be used as a pivot to attack internal systems. If your application server accepts inbound connections from the DMZ, an attacker who owns a DMZ host can connect in and probe your internal network, your database, your secrets.
+This project demonstrates a security model where internal services never accept inbound network connections. Internal workers connect out to the DMZ broker, and HTTP requests are tunneled over those outbound connections.
 
-The standard mitigation: **the internal network never accepts inbound connections**. Firewalls enforce this -- only outbound TCP from the secure zone to the DMZ is permitted. Nothing can connect in.
+## Why this exists
 
-But your application still needs to serve HTTP to the internet. The database lives in the secure zone. How do you get requests in and responses out without opening inbound ports?
+Classic DMZ designs often leave an inbound path from DMZ to internal app servers. If DMZ is compromised, that path can be used to pivot deeper into the network.
 
-## Approach
+`lunet-backproxy` removes that inbound path:
 
-The internal application connects **out** to a broker in the DMZ. The broker holds these connections open. When an HTTP request arrives (via NGINX), the broker dispatches it down one of these pre-established connections. The application processes the request (including DB queries), and the response flows back up the same connection.
+- Internal service opens outbound TCP to DMZ broker
+- DMZ broker reuses those established connections for request dispatch
+- Internal service still reaches local DB/resources, but does not listen on a public/internal inbound port
 
-**If the DMZ broker is compromised**, the attacker:
-- Cannot open new connections into the secure zone (firewall blocks inbound)
-- Can only send data down connections the internal app already established
-- The internal app only processes well-formed HTTP requests via the framing protocol
-- The attacker has no direct access to the database or internal network
+## Architecture
 
-The trust boundary is the firewall. The internal app chooses when and where to connect. It never listens.
-
-## Component Diagram
+### Component diagram
 
 ```mermaid
-graph TB
-    subgraph Internet
-        Client[Browser / API Client]
+flowchart LR
+    Client[Public client] --> NGINX[Optional TLS proxy]
+    NGINX --> DMZ[DMZ backproxy]
+
+    subgraph FW[Firewall policy]
+      Rule[Block inbound to secure zone]
+      Rule2[Allow outbound from secure zone]
     end
 
-    subgraph DMZ["DMZ (untrusted zone)"]
-        NGINX["NGINX<br/>TLS termination<br/>:443"]
-        BP["Backproxy<br/>unix socket listener<br/>TCP :9000 listener"]
+    subgraph Secure[Secure zone]
+      Worker[Internal worker]
+      DB[(Local data store)]
     end
 
-    subgraph FW["Firewall"]
-        direction LR
-        Rule["DENY inbound to secure zone<br/>ALLOW outbound from secure zone"]
-    end
-
-    subgraph Secure["Secure Zone (trusted)"]
-        Worker["Conduit Worker<br/>(N coroutines)<br/>NO listening sockets"]
-        DB[(SQLite DB)]
-    end
-
-    Client -->|"HTTPS :443"| NGINX
-    NGINX -->|"HTTP via unix socket"| BP
-    Worker -.->|"TCP :9000<br/>outbound connection<br/>(initiated by worker)"| BP
-    Worker -->|"local queries"| DB
-
-    style FW fill:#f55,stroke:#900,color:#fff
-    style DMZ fill:#fec,stroke:#c90
-    style Secure fill:#cfe,stroke:#090
-    style Internet fill:#eef,stroke:#66c
+    Worker -. outbound tcp tunnel .-> DMZ
+    Worker --> DB
 ```
 
-## Network Flow Diagram
-
-Shows the direction of **TCP connection initiation** vs **data flow**. The key insight: connections only open outward, but data (requests/responses) flows both ways over those connections.
-
-```mermaid
-graph LR
-    subgraph DMZ
-        NGINX["NGINX :443"]
-        BP["Backproxy"]
-    end
-
-    subgraph Secure
-        W["Conduit Worker"]
-        DB[(DB)]
-    end
-
-    Client((Client)) ==>|"1. HTTPS"| NGINX
-    NGINX ==>|"2. HTTP"| BP
-    W -->|"0. TCP connect OUT"| BP
-    BP -.->|"3. REQ frame"| W
-    W -.->|"4. RES frame"| BP
-    BP ==>|"5. HTTP response"| NGINX
-    NGINX ==>|"6. HTTPS response"| Client
-    W <-->|"queries"| DB
-```
-
-## Request Lifecycle (Sequence Diagram)
+### Request sequence
 
 ```mermaid
 sequenceDiagram
+    autonumber
     participant C as Client
-    participant N as NGINX (DMZ)
-    participant B as Backproxy (DMZ)
-    participant W as Conduit Worker (Secure)
-    participant DB as SQLite (Secure)
+    participant D as DMZ backproxy
+    participant W as Internal worker
+    participant S as Local service data
 
-    Note over W,B: Startup: worker connects OUT through firewall
-    W->>B: TCP connect to :9000
-    W->>B: HELLO conduit\n
-    B->>W: READY\n
-    Note over W,B: Connection held open, worker waits for work
+    Note over W,D: Startup
+    W->>D: TCP connect outbound
+    W->>D: HELLO service_name
+    D-->>W: READY
 
-    C->>N: HTTPS GET /api/articles
-    N->>B: HTTP GET /api/articles (via unix socket)
-    B->>B: Pick idle worker from pool
-    B->>W: REQ 83719284 <len>\n<raw HTTP>
-    W->>DB: SELECT * FROM articles ...
-    DB->>W: rows
-    W->>B: RES 83719284 <len>\n<raw HTTP response>
-    B->>N: HTTP 200 (via unix socket)
-    N->>C: HTTPS 200 {"articles":[...]}
-
-    Note over B: If no workers connected:
-    C->>N: HTTPS GET /api/tags
-    N->>B: HTTP GET /api/tags
-    B->>N: HTTP 503 Service Unavailable
-    N->>C: HTTPS 503
+    Note over C,W: Request
+    C->>D: HTTP request
+    D->>W: REQ frame
+    W->>S: App logic or DB query
+    S-->>W: Data
+    W->>D: RES frame
+    D-->>C: HTTP response
 ```
 
-## Wire Protocol
+## Runtime policy
 
-Over the outbound TCP connection between worker and broker:
+This repo is pinned to Lunet `v0.1.0` from GitHub release/tag.
 
-```
-Worker connects -> sends: HELLO <service>\n
-Broker responds:          READY\n
-Broker sends request:     REQ <id> <len>\n<raw HTTP payload>
-Worker sends response:    RES <id> <len>\n<raw HTTP payload>
-```
+- `scripts/setup-lunet.sh` prepares runtime from `https://github.com/lua-lunet/lunet/releases/tag/v0.1.0`
+- On platforms without a prebuilt asset (for example Linux arm64), it clones `lua-lunet/lunet` at tag `v0.1.0` and builds from source
+- No local sibling `../lunet` checkout is required
 
-## Ports / Sockets
+## Demos
 
-| What | Zone | Direction | Purpose |
-|------|------|-----------|---------|
-| `:443` | DMZ | Internet -> NGINX | TLS termination |
-| `/tmp/backproxy.sock` | DMZ | NGINX -> Backproxy | Cleartext HTTP over unix socket |
-| TCP `:9000` | DMZ | Secure -> DMZ (outbound) | Workers connect TO the broker |
-| SQLite DB | Secure | Local only | Never exposed to any network |
+The backproxy is the core solution. Demos are for validation and integration examples.
 
-## Prerequisites
+- `echo` demo: minimal internal service for tunnel validation
+- `conduit` demo: larger RealWorld-style example showing DB and request handler integration
 
-- [xmake](https://xmake.io/) build system
-- [lunet](https://github.com/lua-lunet/lunet) as a sibling directory (`../lunet`)
-- `sqlite3` CLI (for database initialisation)
-- `nginx` (for TLS termination)
-- `openssl` (for dev cert generation)
+`conduit` exists as a realistic test app, not as the product itself.
 
-## Run
+## Local quick start
+
+### 1) Prepare runtime
 
 ```bash
-# 1. Build lunet + sqlite3 driver (if needed)
-xmake build-lunet
-
-# 2. Generate dev TLS cert
-./scripts/gen-dev-cert.sh
-
-# 3. Initialise database
-xmake init-db
-
-# 4. Start DMZ backproxy (terminal 1)
-./scripts/start-dmz.sh
-
-# 5. Start Conduit workers (terminal 2)
-./scripts/start-internal.sh
-
-# 6. Start NGINX (terminal 3)
-./scripts/start-nginx.sh
-
-# 7. Test
-./scripts/curl-test.sh
+xmake setup-lunet
 ```
 
-## Environment Variables
+### 2) Run DMZ broker
 
-### DMZ (backproxy)
-- `UNIX_SOCKET` - unix socket path (default `/tmp/backproxy.sock`)
-- `BACKFLOW_HOST` - TCP bind host for workers (default `127.0.0.1`)
-- `BACKFLOW_PORT` - TCP bind port for workers (default `9000`)
+```bash
+SERVICE_NAME=echo xmake run-dmz
+```
 
-### Secure zone (Conduit workers)
-- `DMZ_HOST` - backproxy TCP host to connect to (default `127.0.0.1`)
-- `BACKFLOW_PORT` - backproxy TCP port to connect to (default `9000`)
-- `WORKERS` - number of worker coroutines (default `4`)
-- `DB_PATH` - SQLite database path (default `.tmp/conduit.sqlite3`)
+### 3) Run internal service
+
+Echo demo:
+
+```bash
+SERVICE_NAME=echo xmake run-echo
+```
+
+Conduit demo:
+
+```bash
+SERVICE_NAME=conduit xmake run-internal
+```
+
+### 4) Verify
+
+```bash
+curl -s http://127.0.0.1:8080/health
+curl -s http://127.0.0.1:8080/hello
+```
+
+## Test
+
+```bash
+xmake test
+```
+
+This runs Lua-only unit tests plus integration test through the DMZ backproxy path.
+
+## Gentle load test
+
+Example against conduit path with low worker count:
+
+```bash
+WORKERS=2 SERVICE_NAME=conduit xmake run-internal
+SERVICE_NAME=conduit xmake run-dmz
+./scripts/docker/load-gentle.sh /api/tags
+```
+
+## Docker compose topology
+
+`docker-compose.yml` simulates separate DMZ and internal zones on one host.
+
+Start echo profile:
+
+```bash
+docker compose --profile echo up --build
+```
+
+Start conduit profile:
+
+```bash
+SERVICE_NAME=conduit docker compose --profile conduit up --build
+```
+
+Run load test from host:
+
+```bash
+./scripts/docker/load-gentle.sh /health
+./scripts/docker/load-gentle.sh /api/tags
+```
+
+## Configuration
+
+### DMZ backproxy
+
+- `HTTP_HOST` default `127.0.0.1`
+- `HTTP_PORT` default `8080`
+- `BACKFLOW_HOST` default `127.0.0.1`
+- `BACKFLOW_PORT` default `9000`
+- `SERVICE_NAME` default `conduit`
+- `UNIX_SOCKET` default `/tmp/backproxy.sock`
+
+### Internal workers
+
+- `DMZ_HOST` default `127.0.0.1`
+- `BACKFLOW_PORT` default `9000`
+- `SERVICE_NAME` default `conduit`
+- `WORKERS` default `2 x CPU cores` (minimum `2`)
+
+### Conduit demo only
+
+- `DB_PATH` default `.tmp/conduit.sqlite3`
+- `JWT_SECRET`
+- `JWT_EXPIRY`
+
+## Notes
+
+- Testing and runtime scripts use only Lua, xmake, and shell tooling in this repo
+- If Lunet `v0.1.0` compatibility issues are discovered, open an issue in `lua-lunet/lunet` with repro steps
