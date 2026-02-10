@@ -4,6 +4,29 @@ Secure reverse outbound proxy for DMZ topologies.
 
 This project demonstrates a security model where internal services never accept inbound network connections. Internal workers connect out to the DMZ broker, and HTTP requests are tunneled over those outbound connections.
 
+## Design stance
+
+This project intentionally follows the Unix way and the QMail security model:
+
+- one process, one focused job
+- strict process separation across trust boundaries
+- use specialized perimeter software for perimeter threats
+
+`lunet-backproxy` is intentionally barebones and fast. Its job is request brokering over outbound worker tunnels using Lunet/libuv.
+
+`lunet-backproxy` is **not** intended to replace OpenResty/NGINX/WAF functionality.
+
+By design, perimeter concerns belong in dedicated fronting components:
+
+- TLS termination and certificate lifecycle
+- DDoS and flood handling
+- slow-client / slowloris mitigation
+- request throttling and rate limiting
+- edge authentication and access policy
+- CVE-driven hardening cadence for perimeter software
+
+This is why the backproxy itself does not implement TLS and does not try to become a full security gateway.
+
 ## Why this exists
 
 Classic DMZ designs often leave an inbound path from DMZ to internal app servers. If DMZ is compromised, that path can be used to pivot deeper into the network.
@@ -14,13 +37,19 @@ Classic DMZ designs often leave an inbound path from DMZ to internal app servers
 - DMZ broker reuses those established connections for request dispatch
 - Internal service still reaches local DB/resources, but does not listen on a public/internal inbound port
 
+The secure deployment pattern is:
+
+1. OpenResty or NGINX at the edge for transport and abuse controls.
+2. Backproxy in DMZ for fast tunnel brokering only.
+3. Internal workers behind outbound-only firewall policy.
+
 ## Architecture
 
 ### Component diagram
 
 ```mermaid
 flowchart LR
-    Client[Public client] --> NGINX[Optional TLS proxy]
+    Client[Public client] --> NGINX[OpenResty or NGINX edge]
     NGINX --> DMZ[DMZ backproxy]
 
     subgraph FW[Firewall policy]
@@ -69,6 +98,22 @@ This repo is pinned to Lunet `v0.1.0` from GitHub release/tag.
 - On platforms without a prebuilt asset (for example Linux arm64), it clones `lua-lunet/lunet` at tag `v0.1.0` and builds from source
 - No local sibling `../lunet` checkout is required
 
+## Boundary of responsibility
+
+Backproxy responsibilities:
+
+- maintain worker tunnel pool
+- dispatch framed requests to available workers
+- return responses with minimal overhead
+
+Out-of-scope responsibilities (must be handled by OpenResty/NGINX/other security tooling):
+
+- TLS, mTLS, certificate management
+- WAF rules and request filtering
+- DDoS/flood controls and connection shaping
+- rate limits and abuse throttling
+- public authentication and edge authorization
+
 ## Demos
 
 The backproxy is the core solution. Demos are for validation and integration examples.
@@ -77,19 +122,52 @@ The backproxy is the core solution. Demos are for validation and integration exa
 - `conduit` demo: larger RealWorld-style example showing DB and request handler integration
 
 `conduit` exists as a realistic test app, not as the product itself.
+It is optional and can be disabled in test runs with `ENABLE_CONDUIT_DEMO=0`.
+
+## Build your own internal service
+
+You do not need the conduit demo architecture. A custom internal service only needs:
+
+1. A handler function that accepts raw HTTP request bytes and returns raw HTTP response bytes.
+2. A worker loop that connects outbound to DMZ using `app/internal/worker.lua`.
+
+Minimal pattern:
+
+```lua
+local worker = require("app.internal.worker")
+local http_rebuild = require("app.common.http_rebuild")
+
+local function my_handler(raw_http_request)
+    return http_rebuild.build_response(
+        "200 OK",
+        { ["Content-Type"] = "text/plain" },
+        "hello from custom service\n"
+    )
+end
+
+while true do
+    worker.run_one_worker("dmz-host-or-ip", 9000, "myservice", my_handler)
+end
+```
+
+Then run DMZ with matching service name:
+
+```bash
+SERVICE_NAME=myservice xmake run run-dmz
+```
 
 ## Local quick start
 
 ### 1) Prepare runtime
 
 ```bash
-xmake setup-lunet
+xmake run setup-lunet
 ```
 
 ### 2) Run DMZ broker
 
 ```bash
-SERVICE_NAME=echo xmake run-dmz
+SERVICE_NAME=echo xmake run run-dmz
 ```
 
 ### 3) Run internal service
@@ -97,13 +175,13 @@ SERVICE_NAME=echo xmake run-dmz
 Echo demo:
 
 ```bash
-SERVICE_NAME=echo xmake run-echo
+SERVICE_NAME=echo xmake run run-echo
 ```
 
 Conduit demo:
 
 ```bash
-SERVICE_NAME=conduit xmake run-internal
+SERVICE_NAME=conduit xmake run run-internal
 ```
 
 ### 4) Verify
@@ -119,17 +197,30 @@ curl -s http://127.0.0.1:8080/hello
 xmake test
 ```
 
-This runs Lua-only unit tests plus integration test through the DMZ backproxy path.
+This runs Lua-only unit tests plus conduit integration by default.
+To run core backproxy tests without conduit demo integration:
+
+```bash
+ENABLE_CONDUIT_DEMO=0 xmake test
+```
 
 ## Gentle load test
 
 Example against conduit path with low worker count:
 
 ```bash
-WORKERS=2 SERVICE_NAME=conduit xmake run-internal
-SERVICE_NAME=conduit xmake run-dmz
+WORKERS=2 SERVICE_NAME=conduit xmake run run-internal
+SERVICE_NAME=conduit xmake run run-dmz
 ./scripts/docker/load-gentle.sh /api/tags
 ```
+
+Defaults for `scripts/docker/load-gentle.sh` are intentionally conservative:
+- `REQUESTS=10`
+- `CONCURRENCY=1`
+- `MAX_TIME=5`
+
+For stronger stress, raise values explicitly (for example `CONCURRENCY=4 REQUESTS=100`).
+Keep this separate from normal smoke checks.
 
 ## Docker compose topology
 
@@ -164,6 +255,11 @@ Run load test from host:
 - `BACKFLOW_PORT` default `9000`
 - `SERVICE_NAME` default `conduit`
 - `UNIX_SOCKET` default `/tmp/backproxy.sock`
+- `BROKER_MAX_WORKERS_PER_SERVICE` default `1024`
+- `HTTP_MAX_HEADER_LINES` default `256`
+- `HTTP_MAX_HEADER_BYTES` default `65536`
+- `HTTP_MAX_LINE_BYTES` default `8192`
+- `HTTP_MAX_BODY_BYTES` default `1048576`
 
 ### Internal workers
 
@@ -177,8 +273,13 @@ Run load test from host:
 - `DB_PATH` default `.tmp/conduit.sqlite3`
 - `JWT_SECRET`
 - `JWT_EXPIRY`
+- `ENABLE_CONDUIT_DEMO` default `1` (set `0` to skip conduit integration in tests)
 
 ## Notes
 
 - Testing and runtime scripts use only Lua, xmake, and shell tooling in this repo
+- Known runtime segfault under concurrent load in Lunet `v0.1.0` is tracked upstream:
+  - [lua-lunet/lunet#48](https://github.com/lua-lunet/lunet/issues/48)
+  - [lua-lunet/lunet#50](https://github.com/lua-lunet/lunet/issues/50)
+- Repro harness in this repo: `scripts/repro-segfault-v010.sh`
 - If Lunet `v0.1.0` compatibility issues are discovered, open an issue in `lua-lunet/lunet` with repro steps

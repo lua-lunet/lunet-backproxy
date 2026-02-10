@@ -10,6 +10,7 @@ tests=(
     "test/test_unix_loop.lua"
     "test/test_tcp_loop.lua"
     "test/test_combined_loops.lua"
+    "test/test_hardening.lua"
 )
 
 for t in "${tests[@]}"; do
@@ -17,9 +18,14 @@ for t in "${tests[@]}"; do
     "$LUNET_BIN" "$ROOT_DIR/$t"
 done
 
-echo "Running integration test..."
-export DB_PATH="$ROOT_DIR/.tmp/test_integration.sqlite3"
-rm -f "$DB_PATH"
-"$LUNET_BIN" "$ROOT_DIR/test/test_integration.lua"
+ENABLE_CONDUIT_DEMO="${ENABLE_CONDUIT_DEMO:-1}"
+if [ "$ENABLE_CONDUIT_DEMO" = "1" ]; then
+    echo "Running integration test (conduit demo enabled)..."
+    export DB_PATH="$ROOT_DIR/.tmp/test_integration.sqlite3"
+    rm -f "$DB_PATH"
+    "$LUNET_BIN" "$ROOT_DIR/test/test_integration.lua"
+else
+    echo "Skipping conduit integration test (ENABLE_CONDUIT_DEMO=$ENABLE_CONDUIT_DEMO)"
+fi
 
 echo "All tests passed."

@@ -58,9 +58,11 @@ jobs:
 
       - name: Prepare Runtime
         run: |
-          xmake setup-lunet
+          xmake run setup-lunet
 
       - name: Run Tests
+        env:
+          ENABLE_CONDUIT_DEMO: "1"
         run: |
           xmake test
 

@@ -6,6 +6,55 @@ Guidance for AI agents working on this Lua project.
 
 This is a **Lua-only project** using **xmake** for build automation.
 
+## Build And Runtime Policy
+
+This repository is pinned to **Lunet `v0.1.0`** and must not depend on ad-hoc local Lunet trees.
+
+- Primary setup command:
+  ```bash
+  xmake run setup-lunet
+  ```
+- Compatibility alias:
+  ```bash
+  xmake run build-lunet
+  ```
+
+Runtime bootstrap rules:
+- Use `scripts/setup-lunet.sh` and `scripts/lunet-env.sh`.
+- Prefer GitHub release artifacts for `v0.1.0` when available.
+- If no matching prebuilt artifact exists for the host platform/arch, build from `github.com/lua-lunet/lunet` **tag `v0.1.0`** only.
+- Do not rely on `../lunet` sibling checkouts or unpublished local Lunet changes.
+
+Supported xmake entry points in this repo:
+- `xmake run setup-lunet`
+- `xmake run run-dmz`
+- `xmake run run-internal`
+- `xmake run run-echo`
+- `xmake test`
+- Optional conduit integration gating for tests: `ENABLE_CONDUIT_DEMO=0 xmake test`
+
+When debugging runtime-level issues:
+- If zero-cost tracing is needed, use a source build of Lunet with its xmake `trace` option enabled, from the correct tagged source, and document the exact flags/commit used.
+- Do not switch the project to random local Lunet revisions.
+
+## Architecture And Security Policy
+
+Follow the Unix way and QMail security model:
+
+- Keep `lunet-backproxy` focused on one job: high-speed request brokering over outbound worker tunnels.
+- Preserve strict process separation between edge security components and backproxy runtime.
+- Do not add perimeter security features to backproxy if dedicated components already solve them.
+
+Perimeter and attack-handling concerns must be handled by dedicated fronting software (OpenResty/NGINX/WAF and related tooling), including:
+
+- TLS termination and certificate lifecycle
+- DDoS/flood handling and connection abuse controls
+- slow-client mitigation, throttling, and rate limiting
+- edge authentication/access controls
+- CVE-driven hardening and patch cadence
+
+Backproxy must remain barebones, fast, and libuv-focused. It is not the TLS/security gateway.
+
 **Mandated technologies:**
 - Lua 5.1+ (embedded in Lunet)
 - Lunet (networking runtime)

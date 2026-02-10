@@ -9,6 +9,7 @@ local M = {}
 local pools = {}
 local idle_wait_ms = tonumber(os.getenv("BROKER_IDLE_WAIT_MS") or "10")
 local idle_wait_attempts = tonumber(os.getenv("BROKER_IDLE_WAIT_ATTEMPTS") or "100")
+local default_max_workers_per_service = tonumber(os.getenv("BROKER_MAX_WORKERS_PER_SERVICE") or "1024")
 
 local function add_worker(service, client, reader)
     pools[service] = pools[service] or {}
@@ -18,6 +19,12 @@ local function add_worker(service, client, reader)
         busy = false,
     })
     log.info("BROKER", "registered worker service=%s pool_size=%d", service, #pools[service])
+end
+
+local function service_pool_size(service)
+    local p = pools[service]
+    if not p then return 0 end
+    return #p
 end
 
 local function remove_worker(service, w)
@@ -58,7 +65,11 @@ local function wait_for_idle(service)
     return nil
 end
 
-function M.accept_workers(tcp_listener)
+function M.accept_workers(tcp_listener, opts)
+    local max_workers_per_service = tonumber(opts and opts.max_workers_per_service)
+        or default_max_workers_per_service
+        or 1024
+
     while true do
         local client, aerr = socket.accept(tcp_listener)
         if not client then
@@ -77,6 +88,13 @@ function M.accept_workers(tcp_listener)
         local svc = line:match("^HELLO%s+(%S+)$")
         if not svc then
             log.warn("BROKER", "bad HELLO: %s", line)
+            socket.close(client)
+            goto continue
+        end
+
+        if max_workers_per_service > 0 and service_pool_size(svc) >= max_workers_per_service then
+            log.warn("BROKER", "rejecting worker service=%s limit=%d", svc, max_workers_per_service)
+            socket.write(client, "BUSY\n")
             socket.close(client)
             goto continue
         end

@@ -19,7 +19,11 @@ function BufferedReader:fill_buffer()
     return true
 end
 
-function BufferedReader:read_line()
+function BufferedReader:read_line(max_bytes)
+    if max_bytes and max_bytes <= 0 then
+        max_bytes = nil
+    end
+
     while true do
         local nl_pos = self.buffer:find("\n")
         if nl_pos then
@@ -28,8 +32,15 @@ function BufferedReader:read_line()
             if line:sub(-1) == "\r" then
                 line = line:sub(1, -2)
             end
+            if max_bytes and #line > max_bytes then
+                return nil, "line too long"
+            end
             self.buffer = self.buffer:sub(nl_pos + 1)
             return line
+        end
+
+        if max_bytes and #self.buffer > max_bytes then
+            return nil, "line too long"
         end
 
         local ok, err = self:fill_buffer()

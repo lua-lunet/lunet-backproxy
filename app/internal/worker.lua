@@ -3,16 +3,19 @@ local log = require("app.common.log")
 local frame = require("app.common.frame")
 local http_rebuild = require("app.common.http_rebuild")
 local BufferedReader = require("app.common.buffered_reader")
-local request_handler = require("app.conduit.request_handler")
 
 local M = {}
 
-local function conduit_handler(raw)
-    return request_handler.handle(raw)
-end
-
 local function safe_handle(raw, handler)
-    local h = handler or conduit_handler
+    if type(handler) ~= "function" then
+        return http_rebuild.build_response(
+            "502 Bad Gateway",
+            { ["Content-Type"] = "text/plain" },
+            "internal handler not configured\n"
+        )
+    end
+
+    local h = handler
     local ok, res = pcall(h, raw)
     if ok and type(res) == "string" and #res > 0 then
         return res

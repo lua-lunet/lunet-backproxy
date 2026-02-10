@@ -34,7 +34,7 @@ services:
       DMZ_HOST: "dmz"
       BACKFLOW_PORT: "9000"
       SERVICE_NAME: "echo"
-      WORKERS: "${WORKERS:-2}"
+      WORKERS: "${WORKERS:-}"
     depends_on:
       dmz:
         condition: service_healthy
@@ -53,7 +53,7 @@ services:
       DMZ_HOST: "dmz"
       BACKFLOW_PORT: "9000"
       SERVICE_NAME: "conduit"
-      WORKERS: "${WORKERS:-2}"
+      WORKERS: "${WORKERS:-}"
       DB_PATH: "/opt/lunet-backproxy/.tmp/conduit.sqlite3"
     depends_on:
       dmz:

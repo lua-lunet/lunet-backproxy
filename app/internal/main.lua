@@ -13,7 +13,8 @@ local function worker_loop(id)
         local ok, err = worker.run_one_worker(
             config.internal.dmz_host,
             config.internal.dmz_port,
-            config.internal.service_name
+            config.internal.service_name,
+            request_handler.handle
         )
         if not ok then
             log.warn("MAIN", "worker %d error: %s", id, tostring(err))

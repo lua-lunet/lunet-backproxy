@@ -32,10 +32,17 @@ lunet.spawn(function()
     log.info("DMZ", "backflow listener on %s:%d", bf_host, bf_port)
 
     lunet.spawn(function()
-        broker.accept_workers(tcp_listener)
+        broker.accept_workers(tcp_listener, {
+            max_workers_per_service = config.dmz.max_workers_per_service,
+        })
     end)
 
-    ingress.accept_http(http_listener, broker, config.internal.service_name)
+    ingress.accept_http(http_listener, broker, config.internal.service_name, {
+        max_header_lines = config.dmz.max_header_lines,
+        max_header_bytes = config.dmz.max_header_bytes,
+        max_line_bytes = config.dmz.max_line_bytes,
+        max_body_bytes = config.dmz.max_body_bytes,
+    })
 
     log.info("DMZ", "running. health: http://%s:%d/health", http_host, http_port)
 end)
