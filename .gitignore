@@ -1,0 +1,27 @@
+# Build artifacts
+build/
+.build/
+*.o
+*.a
+*.so
+
+# Temporary files
+.tmp/
+*.tmp
+*.swp
+*.swo
+*~
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Development
+*.db
+*.sqlite3
+nginx/certs/dev.*
