@@ -40,6 +40,7 @@ jobs:
             luajit \
             libluajit-5.1-dev \
             sqlite3 \
+            libsodium-dev \
             curl \
             git \
             jq
@@ -47,7 +48,7 @@ jobs:
       - name: Install Dependencies (macOS)
         if: runner.os == 'macOS'
         run: |
-          brew install libuv luajit sqlite coreutils git jq
+          brew install libuv luajit sqlite libsodium coreutils git jq
 
       - name: Prepare Runtime
         run: |

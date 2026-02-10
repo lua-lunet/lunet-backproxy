@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libuv1-dev \
     luajit \
     libluajit-5.1-dev \
+    libsodium-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /opt/lunet-backproxy
