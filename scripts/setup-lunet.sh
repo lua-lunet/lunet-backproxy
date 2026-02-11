@@ -2,9 +2,17 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-LUNET_VERSION="${LUNET_VERSION:-v0.1.0}"
-RUNTIME_DIR="$ROOT_DIR/.tmp/runtime/lunet-${LUNET_VERSION}"
-SRC_DIR="$ROOT_DIR/.tmp/src/lunet-${LUNET_VERSION}"
+PINNED_LUNET_REF_DEFAULT="6303e54e3a52a6aed30bdff058d7d77535e076aa"
+LUNET_REF="${LUNET_REF:-${LUNET_VERSION:-$PINNED_LUNET_REF_DEFAULT}}"
+LUNET_USE_PREBUILT="${LUNET_USE_PREBUILT:-0}"
+
+ref_slug() {
+    printf "%s" "$1" | tr '/:' '__' | tr -c '[:alnum:]._-' '_'
+}
+
+REF_SLUG="$(ref_slug "$LUNET_REF")"
+RUNTIME_DIR="$ROOT_DIR/.tmp/runtime/lunet-${REF_SLUG}"
+SRC_DIR="$ROOT_DIR/.tmp/src/lunet-${REF_SLUG}"
 
 mkdir -p "$ROOT_DIR/.tmp/runtime" "$ROOT_DIR/.tmp/src"
 
@@ -33,7 +41,7 @@ runtime_matches_host() {
     if [ ! -x "$RUNTIME_DIR/bin/lunet" ] || [ ! -f "$RUNTIME_DIR/.version" ]; then
         return 1
     fi
-    if ! grep -qx "$LUNET_VERSION" "$RUNTIME_DIR/.version"; then
+    if ! grep -qx "$LUNET_REF" "$RUNTIME_DIR/.version"; then
         return 1
     fi
 
@@ -65,21 +73,23 @@ if runtime_matches_host; then
 fi
 
 ASSET_NAME=""
-if [ "$TARGET_OS" = "linux" ] && [ "$TARGET_ARCH" = "amd64" ]; then
-    ASSET_NAME="lunet-linux-amd64.tar.gz"
-elif [ "$TARGET_OS" = "macos" ]; then
-    ASSET_NAME="lunet-macos.tar.gz"
+if [ "$LUNET_USE_PREBUILT" = "1" ] && [[ "$LUNET_REF" =~ ^v[0-9] ]]; then
+    if [ "$TARGET_OS" = "linux" ] && [ "$TARGET_ARCH" = "amd64" ]; then
+        ASSET_NAME="lunet-linux-amd64.tar.gz"
+    elif [ "$TARGET_OS" = "macos" ]; then
+        ASSET_NAME="lunet-macos.tar.gz"
+    fi
 fi
 
 rm -rf "$RUNTIME_DIR"
 mkdir -p "$RUNTIME_DIR/bin" "$RUNTIME_DIR/lib/lunet"
 
 if [ -n "$ASSET_NAME" ]; then
-    URL="https://github.com/lua-lunet/lunet/releases/download/${LUNET_VERSION}/${ASSET_NAME}"
+    URL="https://github.com/lua-lunet/lunet/releases/download/${LUNET_REF}/${ASSET_NAME}"
     ARCHIVE="$ROOT_DIR/.tmp/${ASSET_NAME}"
-    STAGE="$ROOT_DIR/.tmp/lunet-stage-${LUNET_VERSION}"
+    STAGE="$ROOT_DIR/.tmp/lunet-stage-${REF_SLUG}"
 
-    echo "Downloading Lunet ${LUNET_VERSION} release asset: ${ASSET_NAME}"
+    echo "Downloading Lunet ${LUNET_REF} release asset: ${ASSET_NAME}"
     curl -fL "$URL" -o "$ARCHIVE"
 
     rm -rf "$STAGE"
@@ -99,7 +109,7 @@ if [ -n "$ASSET_NAME" ]; then
     cp "$LUNET_SO_SRC" "$RUNTIME_DIR/lib/lunet.so"
     cp "$SQLITE_SO_SRC" "$RUNTIME_DIR/lib/lunet/sqlite3.so"
 else
-    echo "No prebuilt Lunet asset for ${TARGET_OS}/${TARGET_ARCH}; building from github.com/lua-lunet/lunet tag ${LUNET_VERSION}"
+    echo "Building Lunet from github.com/lua-lunet/lunet ref ${LUNET_REF}"
 
     if ! command -v git >/dev/null 2>&1; then
         echo "Missing required tool: git"
@@ -111,12 +121,16 @@ else
     fi
 
     rm -rf "$SRC_DIR"
-    git clone --depth 1 --branch "$LUNET_VERSION" https://github.com/lua-lunet/lunet.git "$SRC_DIR"
+    git clone https://github.com/lua-lunet/lunet.git "$SRC_DIR"
+    (
+        cd "$SRC_DIR"
+        git checkout "$LUNET_REF"
+    )
 
     (
         cd "$SRC_DIR"
         unset XMAKE_PROJECT_DIR
-        xmake f -P . -m release -y
+        xmake f -P . -m release --lunet_trace=n --lunet_verbose_trace=n -y
         xmake build -P .
         xmake build -P . lunet-sqlite3
     )
@@ -136,7 +150,7 @@ else
 fi
 
 chmod +x "$RUNTIME_DIR/bin/lunet"
-echo "$LUNET_VERSION" > "$RUNTIME_DIR/.version"
+echo "$LUNET_REF" > "$RUNTIME_DIR/.version"
 
 echo "Prepared Lunet runtime at $RUNTIME_DIR"
 echo "LUNET_BIN=$RUNTIME_DIR/bin/lunet"

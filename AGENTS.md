@@ -8,7 +8,7 @@ This is a **Lua-only project** using **xmake** for build automation.
 
 ## Build And Runtime Policy
 
-This repository is pinned to **Lunet `v0.1.0`** and must not depend on ad-hoc local Lunet trees.
+This repository is pinned to **Lunet commit `6303e54e3a52a6aed30bdff058d7d77535e076aa`** and must not depend on ad-hoc local Lunet trees.
 
 - Primary setup command:
   ```bash
@@ -21,8 +21,8 @@ This repository is pinned to **Lunet `v0.1.0`** and must not depend on ad-hoc lo
 
 Runtime bootstrap rules:
 - Use `scripts/setup-lunet.sh` and `scripts/lunet-env.sh`.
-- Prefer GitHub release artifacts for `v0.1.0` when available.
-- If no matching prebuilt artifact exists for the host platform/arch, build from `github.com/lua-lunet/lunet` **tag `v0.1.0`** only.
+- Default to building from `github.com/lua-lunet/lunet` at the pinned commit above.
+- Prebuilt assets are opt-in only (`LUNET_USE_PREBUILT=1`) and intended for tagged release refs.
 - Do not rely on `../lunet` sibling checkouts or unpublished local Lunet changes.
 
 Supported xmake entry points in this repo:
@@ -30,11 +30,16 @@ Supported xmake entry points in this repo:
 - `xmake run run-dmz`
 - `xmake run run-internal`
 - `xmake run run-echo`
+- `xmake run stress-e2e`
+- `xmake run stress-compare`
 - `xmake test`
 - Optional conduit integration gating for tests: `ENABLE_CONDUIT_DEMO=0 xmake test`
 
 When debugging runtime-level issues:
-- If zero-cost tracing is needed, use a source build of Lunet with its xmake `trace` option enabled, from the correct tagged source, and document the exact flags/commit used.
+- Instrumentation must remain optional.
+- For baseline performance, run with non-instrumented runtime (release profile).
+- For diagnostics, run with instrumented runtime (trace/ASan) and compare overhead explicitly (`xmake run stress-compare`).
+- If zero-cost tracing is needed, use a source build of Lunet with its xmake trace/ASan options enabled, and document the exact flags and commit used.
 - Do not switch the project to random local Lunet revisions.
 
 ## Architecture And Security Policy

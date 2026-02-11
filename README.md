@@ -92,11 +92,17 @@ sequenceDiagram
 
 ## Runtime policy
 
-This repo is pinned to Lunet `v0.1.0` from GitHub release/tag.
+This repo is pinned to Lunet commit:
 
-- `scripts/setup-lunet.sh` prepares runtime from `https://github.com/lua-lunet/lunet/releases/tag/v0.1.0`
-- On platforms without a prebuilt asset (for example Linux arm64), it clones `lua-lunet/lunet` at tag `v0.1.0` and builds from source
+- `6303e54e3a52a6aed30bdff058d7d77535e076aa`
+
+Default setup builds that exact upstream ref from GitHub source and stages a local runtime under `.tmp/runtime`.
+
+- `scripts/setup-lunet.sh` prepares the pinned runtime from `https://github.com/lua-lunet/lunet`
 - No local sibling `../lunet` checkout is required
+- To intentionally override, set:
+  - `LUNET_REF=<tag-or-commit>`
+  - `LUNET_USE_PREBUILT=1` (only for release tags that publish assets)
 
 ## Boundary of responsibility
 
@@ -204,6 +210,45 @@ To run core backproxy tests without conduit demo integration:
 ENABLE_CONDUIT_DEMO=0 xmake test
 ```
 
+## Stress and throughput
+
+Run real end-to-end stress on DMZ + internal Conduit path:
+
+```bash
+xmake run stress-e2e
+```
+
+Useful knobs:
+
+```bash
+REQUESTS=1500 ROUNDS=6 CONCURRENCY=24 MAX_TIME=5 xmake run stress-e2e
+WORKERS=1 DB_POOL_SIZE=1 REQUESTS=5000 CONCURRENCY=128 xmake run stress-e2e
+```
+
+Compare non-instrumented vs instrumented runtime overhead:
+
+```bash
+xmake run stress-compare
+```
+
+By default `stress-compare` looks for an instrumented Lunet build at:
+
+- `/Users/Shared/lua-lunet/lunet/build/<os>/<arch>/debug/lunet-run`
+
+You can pass explicit instrumented runtime paths:
+
+```bash
+INSTRUMENTED_LUNET_BIN=/abs/path/to/lunet-run \
+INSTRUMENTED_LUA_CPATH='/abs/path/to/?.so;/abs/path/to/?/?.so;;' \
+xmake run stress-compare
+```
+
+The compare script prints:
+
+- baseline requests/sec
+- instrumented requests/sec
+- overhead percentage
+
 ## Gentle load test
 
 Example against conduit path with low worker count:
@@ -275,11 +320,15 @@ Run load test from host:
 - `JWT_EXPIRY`
 - `ENABLE_CONDUIT_DEMO` default `1` (set `0` to skip conduit integration in tests)
 
+### Runtime selection
+
+- `LUNET_REF` default `6303e54e3a52a6aed30bdff058d7d77535e076aa`
+- `LUNET_USE_PREBUILT` default `0`
+- `LUNET_BIN` optional explicit runtime binary path (useful for instrumented runs)
+- `LUA_CPATH` optional explicit module path when using custom `LUNET_BIN`
+
 ## Notes
 
 - Testing and runtime scripts use only Lua, xmake, and shell tooling in this repo
-- Known runtime segfault under concurrent load in Lunet `v0.1.0` is tracked upstream:
-  - [lua-lunet/lunet#48](https://github.com/lua-lunet/lunet/issues/48)
-  - [lua-lunet/lunet#50](https://github.com/lua-lunet/lunet/issues/50)
-- Repro harness in this repo: `scripts/repro-segfault-v010.sh`
-- If Lunet `v0.1.0` compatibility issues are discovered, open an issue in `lua-lunet/lunet` with repro steps
+- Historical `v0.1.0` crash reproduction harness remains in repo: `scripts/repro-segfault-v010.sh`
+- This repo now defaults to the fixed upstream Lunet commit listed above
