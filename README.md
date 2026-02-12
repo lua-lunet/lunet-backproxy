@@ -326,6 +326,7 @@ SPIRE-like selector format is supported in `HTTP_PEER_SELECTOR_POLICY_FILE`:
 - selector shape: `unix:key:value`
 - selectors are ANDed, similar to SPIRE registration entry matching
 - supported keys: `uid`, `gid`, `transport`, `path`, `path_prefix`, `cmdline_prefix`, `sha256`
+- `unix:sha256:<hex>` hashes the executable file resolved from `/proc/<pid>/exe` and compares digests
 
 Example policy file:
 
@@ -338,8 +339,15 @@ return {
         "unix:gid:33",
         "unix:path_prefix:/usr/sbin/nginx",
         "unix:cmdline_prefix:nginx: worker process",
+        "unix:sha256:<hex digest>",
     },
 }
+```
+
+Digest helper:
+
+```bash
+sha256sum /usr/sbin/nginx | awk '{print $1}'
 ```
 
 Example startup:

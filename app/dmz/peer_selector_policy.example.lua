@@ -24,7 +24,9 @@ return {
         "unix:gid:33",
         "unix:path_prefix:/usr/sbin/nginx",
         "unix:cmdline_prefix:nginx: worker process",
-        -- Optional hardening:
-        -- "unix:sha256:<hex digest>",
+        -- Optional hardening: hash of the executable file resolved from /proc/<pid>/exe.
+        -- Example digest command:
+        --   sha256sum /usr/sbin/nginx | awk '{print $1}'
+        "unix:sha256:<hex digest>",
     },
 }
