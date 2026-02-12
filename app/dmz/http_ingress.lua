@@ -3,6 +3,7 @@ local lunet = require("lunet")
 local log = require("app.common.log")
 local http_rebuild = require("app.common.http_rebuild")
 local BufferedReader = require("app.common.buffered_reader")
+local peer_guard = require("app.dmz.peer_guard")
 
 local M = {}
 
@@ -91,6 +92,24 @@ function M.accept_http(listener, broker, service_name, limits)
                 break
             end
             local ok, err = pcall(function()
+                local allowed, peer_info, preason = peer_guard.authorize(client, limits)
+                if preason and preason ~= "" then
+                    log.warn("INGRESS", "peer verify note: %s peer=%s transport=%s pid=%s uid=%s gid=%s",
+                        tostring(preason), tostring(peer_info and peer_info.name),
+                        tostring(peer_info and peer_info.transport),
+                        tostring(peer_info and peer_info.pid),
+                        tostring(peer_info and peer_info.uid),
+                        tostring(peer_info and peer_info.gid))
+                end
+                if not allowed then
+                    local resp = http_rebuild.build_response("403 Forbidden",
+                        { ["Content-Type"] = "text/plain" },
+                        "peer rejected: " .. tostring(preason) .. "\n")
+                    socket.write(client, resp)
+                    socket.close(client)
+                    return
+                end
+
                 local reader = BufferedReader.new(client)
                 local raw, path, rerr, rcode = read_http_request(reader, limits)
                 if not raw then

@@ -301,6 +301,7 @@ Run load test from host:
 
 ### DMZ backproxy
 
+- `DMZ_HTTP_TRANSPORT` default `tcp` (`tcp` or `unix`)
 - `HTTP_HOST` default `127.0.0.1`
 - `HTTP_PORT` default `8080`
 - `BACKFLOW_HOST` default `127.0.0.1`
@@ -312,6 +313,12 @@ Run load test from host:
 - `HTTP_MAX_HEADER_BYTES` default `65536`
 - `HTTP_MAX_LINE_BYTES` default `8192`
 - `HTTP_MAX_BODY_BYTES` default `1048576`
+- `HTTP_PEER_VERIFY_MODE` default `off` (`off`, `log`, `enforce`)
+- `HTTP_PEER_EXPECT_TRANSPORT` optional expected client transport (`unix` or `tcp`)
+- `HTTP_PEER_ALLOWED_UIDS` optional CSV allowlist (example `33,101`)
+- `HTTP_PEER_ALLOWED_GIDS` optional CSV allowlist
+- `HTTP_PEER_EXE_PREFIXES` optional CSV prefix list for `/proc/<pid>/exe` (Linux)
+- `HTTP_PEER_CMDLINE_PREFIXES` optional CSV prefix list for `/proc/<pid>/cmdline` (Linux)
 
 ### Internal workers
 
@@ -339,3 +346,5 @@ Run load test from host:
 - Testing and runtime scripts use only Lua, xmake, and shell tooling in this repo
 - Historical `v0.1.0` crash reproduction harness remains in repo: `scripts/repro-segfault-v010.sh`
 - This repo now defaults to the fixed upstream Lunet commit listed above
+- Peer identity checks are a host-trust control for Unix sockets. They are not a perimeter replacement and can be bypassed by host root.
+- Linux `/proc` checks require a runtime that can supply peer PID/UID/GID (`socket.getpeercred`). If unavailable, `enforce` mode rejects and `log` mode records the mismatch.

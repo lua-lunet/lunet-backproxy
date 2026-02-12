@@ -7,6 +7,7 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 source "$ROOT_DIR/scripts/lunet-env.sh"
 
 tests=(
+    "test/test_peer_guard.lua"
     "test/test_unix_loop.lua"
     "test/test_tcp_loop.lua"
     "test/test_combined_loops.lua"
