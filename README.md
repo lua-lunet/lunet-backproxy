@@ -319,6 +319,37 @@ Run load test from host:
 - `HTTP_PEER_ALLOWED_GIDS` optional CSV allowlist
 - `HTTP_PEER_EXE_PREFIXES` optional CSV prefix list for `/proc/<pid>/exe` (Linux)
 - `HTTP_PEER_CMDLINE_PREFIXES` optional CSV prefix list for `/proc/<pid>/cmdline` (Linux)
+- `HTTP_PEER_SELECTOR_POLICY_FILE` optional Lua file path returning `{ mode = "...", selectors = {...} }`
+
+SPIRE-like selector format is supported in `HTTP_PEER_SELECTOR_POLICY_FILE`:
+
+- selector shape: `unix:key:value`
+- selectors are ANDed, similar to SPIRE registration entry matching
+- supported keys: `uid`, `gid`, `transport`, `path`, `path_prefix`, `cmdline_prefix`, `sha256`
+
+Example policy file:
+
+```lua
+return {
+    mode = "enforce",
+    selectors = {
+        "unix:transport:unix",
+        "unix:uid:33",
+        "unix:gid:33",
+        "unix:path_prefix:/usr/sbin/nginx",
+        "unix:cmdline_prefix:nginx: worker process",
+    },
+}
+```
+
+Example startup:
+
+```bash
+DMZ_HTTP_TRANSPORT=unix \
+HTTP_PEER_VERIFY_MODE=enforce \
+HTTP_PEER_SELECTOR_POLICY_FILE=/opt/lunet-backproxy/peer-policy.lua \
+xmake run run-dmz
+```
 
 ### Internal workers
 

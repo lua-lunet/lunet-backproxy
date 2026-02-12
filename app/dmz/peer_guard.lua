@@ -27,6 +27,18 @@ local function any_prefix_match(value, prefixes)
     return false
 end
 
+local function shell_quote(s)
+    return "'" .. tostring(s):gsub("'", "'\\''") .. "'"
+end
+
+local function read_cmd_line(cmd)
+    local p = io.popen(cmd)
+    if not p then return nil end
+    local out = p:read("*l")
+    p:close()
+    return out
+end
+
 local function in_int_list(value, allowed)
     if not allowed or #allowed == 0 then
         return true
@@ -57,6 +69,26 @@ local function read_linux_proc(pid)
         info.cmdline = raw:gsub("%z", " ")
     end
     return info
+end
+
+local function sha256_file(path)
+    if not path or path == "" then
+        return nil
+    end
+
+    local quoted = shell_quote(path)
+    local out = read_cmd_line("sha256sum " .. quoted .. " 2>/dev/null")
+    if not out or out == "" then
+        out = read_cmd_line("shasum -a 256 " .. quoted .. " 2>/dev/null")
+    end
+    if not out then
+        return nil
+    end
+    local digest = out:match("^([0-9a-fA-F]+)")
+    if not digest then
+        return nil
+    end
+    return string.lower(digest)
 end
 
 local function detect_peer_cred(client)
@@ -90,12 +122,121 @@ local function detect_peer_cred(client)
     return nil, "unrecognized getpeercred return shape"
 end
 
+local function parse_selector(raw)
+    if type(raw) ~= "string" then
+        return nil, "selector must be string"
+    end
+    local s = raw:match("^%s*(.-)%s*$")
+    local sel_type, key, value = s:match("^([^:]+):([^:]+):(.+)$")
+    if not sel_type or not key or value == nil then
+        return nil, "bad selector format (expected type:key:value)"
+    end
+    return {
+        raw = s,
+        sel_type = sel_type,
+        key = key,
+        value = value,
+    }, nil
+end
+
 local function mode_value(raw)
     raw = (raw or "off"):lower()
     if raw ~= "off" and raw ~= "log" and raw ~= "enforce" then
         return "off"
     end
     return raw
+end
+
+local function ensure_proc_info(peer, runtime)
+    local linux_check = runtime.is_linux
+    local on_linux = (linux_check == nil) and is_linux() or (linux_check == true)
+    if not on_linux then
+        return false, "exe/cmdline selector checks require Linux /proc"
+    end
+    if not peer.pid then
+        return false, "peer pid unavailable for Linux /proc checks"
+    end
+    if peer.exe and peer.cmdline then
+        return true, nil
+    end
+
+    local proc_reader = runtime.proc_reader or read_linux_proc
+    local proc_info = proc_reader(peer.pid)
+    peer.exe = proc_info and proc_info.exe or nil
+    peer.cmdline = proc_info and proc_info.cmdline or nil
+    return true, nil
+end
+
+local function evaluate_spire_like_selectors(peer, opts, runtime)
+    local selectors = opts.peer_selectors
+    if not selectors or #selectors == 0 then
+        return true, nil
+    end
+
+    for _, raw in ipairs(selectors) do
+        local parsed, perr = parse_selector(raw)
+        if not parsed then
+            return false, perr
+        end
+        if parsed.sel_type ~= "unix" then
+            return false, "unsupported selector type: " .. tostring(parsed.sel_type)
+        end
+
+        local key = parsed.key
+        local value = parsed.value
+
+        if key == "uid" then
+            if peer.uid ~= tonumber(value) then
+                return false, "selector mismatch: " .. parsed.raw
+            end
+        elseif key == "gid" then
+            if peer.gid ~= tonumber(value) then
+                return false, "selector mismatch: " .. parsed.raw
+            end
+        elseif key == "transport" then
+            if peer.transport ~= value then
+                return false, "selector mismatch: " .. parsed.raw
+            end
+        elseif key == "path" then
+            local ok, err = ensure_proc_info(peer, runtime)
+            if not ok then
+                return false, err
+            end
+            if (peer.exe or "") ~= value then
+                return false, "selector mismatch: " .. parsed.raw
+            end
+        elseif key == "path_prefix" then
+            local ok, err = ensure_proc_info(peer, runtime)
+            if not ok then
+                return false, err
+            end
+            if not starts_with(peer.exe or "", value) then
+                return false, "selector mismatch: " .. parsed.raw
+            end
+        elseif key == "cmdline_prefix" then
+            local ok, err = ensure_proc_info(peer, runtime)
+            if not ok then
+                return false, err
+            end
+            if not starts_with(peer.cmdline or "", value) then
+                return false, "selector mismatch: " .. parsed.raw
+            end
+        elseif key == "sha256" then
+            local ok, err = ensure_proc_info(peer, runtime)
+            if not ok then
+                return false, err
+            end
+            local hasher = runtime.sha256_file or sha256_file
+            local digest = hasher(peer.exe)
+            if not digest or digest ~= string.lower(value) then
+                return false, "selector mismatch: " .. parsed.raw
+            end
+        else
+            return false, "unsupported selector key: " .. tostring(key)
+        end
+    end
+
+    return true, nil
 end
 
 local function evaluate_peer(peer, opts, runtime)
@@ -121,18 +262,10 @@ local function evaluate_peer(peer, opts, runtime)
     local needs_proc = (opts.peer_exe_prefixes and #opts.peer_exe_prefixes > 0)
         or (opts.peer_cmdline_prefixes and #opts.peer_cmdline_prefixes > 0)
     if needs_proc then
-        local linux_check = runtime.is_linux
-        local on_linux = (linux_check == nil) and is_linux() or (linux_check == true)
-        if not on_linux then
-            return false, "exe/cmdline peer checks require Linux /proc"
+        local ok, err = ensure_proc_info(peer, runtime)
+        if not ok then
+            return false, err
         end
-        if not peer.pid then
-            return false, "peer pid unavailable for Linux /proc checks"
-        end
-        local proc_reader = runtime.proc_reader or read_linux_proc
-        local proc_info = proc_reader(peer.pid)
-        peer.exe = proc_info and proc_info.exe or nil
-        peer.cmdline = proc_info and proc_info.cmdline or nil
 
         if not any_prefix_match(peer.exe or "", opts.peer_exe_prefixes) then
             return false, string.format("peer exe prefix mismatch exe=%s", tostring(peer.exe))
@@ -140,6 +273,11 @@ local function evaluate_peer(peer, opts, runtime)
         if not any_prefix_match(peer.cmdline or "", opts.peer_cmdline_prefixes) then
             return false, string.format("peer cmdline prefix mismatch cmdline=%s", tostring(peer.cmdline))
         end
+    end
+
+    local selector_ok, selector_err = evaluate_spire_like_selectors(peer, opts, runtime)
+    if not selector_ok then
+        return false, selector_err
     end
 
     return true, nil

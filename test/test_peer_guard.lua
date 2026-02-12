@@ -93,6 +93,65 @@ do
     check("linux proc prefix deny", ok == false, reason)
 end
 
+do
+    local ok, reason = guard._evaluate_for_test({
+        transport = "unix",
+        uid = 33,
+        gid = 33,
+        pid = 111,
+    }, {
+        peer_verify_mode = "enforce",
+        peer_selectors = {
+            "unix:transport:unix",
+            "unix:uid:33",
+            "unix:gid:33",
+            "unix:path_prefix:/usr/sbin/nginx",
+            "unix:cmdline_prefix:nginx: worker process",
+            "unix:sha256:deadbeef",
+        },
+    }, {
+        is_linux = true,
+        proc_reader = function(_)
+            return {
+                exe = "/usr/sbin/nginx",
+                cmdline = "nginx: worker process /usr/sbin/nginx -g daemon off;",
+            }
+        end,
+        sha256_file = function(_)
+            return "deadbeef"
+        end,
+    })
+    check("spire-like selectors pass", ok == true, reason)
+end
+
+do
+    local ok, reason = guard._evaluate_for_test({
+        transport = "unix",
+        uid = 1000,
+        gid = 1000,
+    }, {
+        peer_verify_mode = "enforce",
+        peer_selectors = {
+            "unix:uid:1001",
+        },
+    }, {
+        is_linux = true,
+    })
+    check("spire-like selector mismatch denied", ok == false, reason)
+end
+
+do
+    local ok, reason = guard._evaluate_for_test({
+        transport = "unix",
+    }, {
+        peer_verify_mode = "enforce",
+        peer_selectors = {
+            "unix:nonRoot:true",
+        },
+    })
+    check("unsupported selector key denied", ok == false, reason)
+end
+
 print(string.format("========== %d/%d tests passed ==========", pass_count, test_count))
 if pass_count == test_count then
     os.exit(0)

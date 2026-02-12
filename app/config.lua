@@ -55,6 +55,32 @@ local function csv_ints(raw)
     return out
 end
 
+local function load_selector_policy(path)
+    if not path or path == "" then
+        return nil, nil
+    end
+
+    local chunk, lerr = loadfile(path)
+    if not chunk then
+        return nil, "failed loading selector policy file: " .. tostring(lerr)
+    end
+
+    local ok, result = pcall(chunk)
+    if not ok then
+        return nil, "failed executing selector policy file: " .. tostring(result)
+    end
+    if type(result) ~= "table" then
+        return nil, "selector policy file must return a Lua table"
+    end
+    return result, nil
+end
+
+local selector_policy_file = os.getenv("HTTP_PEER_SELECTOR_POLICY_FILE") or ""
+local selector_policy, selector_policy_err = load_selector_policy(selector_policy_file)
+if selector_policy_err then
+    error(selector_policy_err)
+end
+
 M.dmz = {
     unix_socket = os.getenv("UNIX_SOCKET") or "/tmp/backproxy.sock",
     http_transport = os.getenv("DMZ_HTTP_TRANSPORT") or "tcp",
@@ -67,12 +93,16 @@ M.dmz = {
     max_line_bytes = env_int("HTTP_MAX_LINE_BYTES", 8192),
     max_body_bytes = env_int("HTTP_MAX_BODY_BYTES", 1048576),
     max_workers_per_service = env_int("BROKER_MAX_WORKERS_PER_SERVICE", 1024),
-    peer_verify_mode = os.getenv("HTTP_PEER_VERIFY_MODE") or "off",
+    peer_verify_mode = os.getenv("HTTP_PEER_VERIFY_MODE")
+        or (selector_policy and selector_policy.mode)
+        or "off",
     peer_expect_transport = os.getenv("HTTP_PEER_EXPECT_TRANSPORT") or "",
     peer_allowed_uids = csv_ints(os.getenv("HTTP_PEER_ALLOWED_UIDS")),
     peer_allowed_gids = csv_ints(os.getenv("HTTP_PEER_ALLOWED_GIDS")),
     peer_exe_prefixes = split_csv(os.getenv("HTTP_PEER_EXE_PREFIXES")),
     peer_cmdline_prefixes = split_csv(os.getenv("HTTP_PEER_CMDLINE_PREFIXES")),
+    peer_selector_policy_file = selector_policy_file,
+    peer_selectors = (selector_policy and selector_policy.selectors) or {},
 }
 
 M.internal = {

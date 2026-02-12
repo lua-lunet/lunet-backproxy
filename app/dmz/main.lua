@@ -61,6 +61,7 @@ lunet.spawn(function()
         peer_allowed_gids = config.dmz.peer_allowed_gids,
         peer_exe_prefixes = config.dmz.peer_exe_prefixes,
         peer_cmdline_prefixes = config.dmz.peer_cmdline_prefixes,
+        peer_selectors = config.dmz.peer_selectors,
     })
 
     log.info("DMZ", "running. health: http://%s:%d/health", http_host, http_port)
