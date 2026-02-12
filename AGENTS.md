@@ -24,6 +24,7 @@ Runtime bootstrap rules:
 - Default to building from `github.com/lua-lunet/lunet` at the pinned commit above.
 - Prebuilt assets are opt-in only (`LUNET_USE_PREBUILT=1`) and intended for tagged release refs.
 - Do not rely on `../lunet` sibling checkouts or unpublished local Lunet changes.
+- Canonical Lunet xmake/instrumentation docs are upstream: https://github.com/lua-lunet/lunet/blob/main/docs/XMAKE_INTEGRATION.md
 
 Supported xmake entry points in this repo:
 - `xmake run setup-lunet`

@@ -104,6 +104,10 @@ Default setup builds that exact upstream ref from GitHub source and stages a loc
   - `LUNET_REF=<tag-or-commit>`
   - `LUNET_USE_PREBUILT=1` (only for release tags that publish assets)
 
+Canonical Lunet build, tracing, and ASan workflows live upstream:
+
+- [lua-lunet/lunet docs/XMAKE_INTEGRATION.md](https://github.com/lua-lunet/lunet/blob/main/docs/XMAKE_INTEGRATION.md)
+
 ## Boundary of responsibility
 
 Backproxy responsibilities:
@@ -231,9 +235,12 @@ Compare non-instrumented vs instrumented runtime overhead:
 xmake run stress-compare
 ```
 
-By default `stress-compare` looks for an instrumented Lunet build at:
+`stress-compare` auto-detects an instrumented Lunet runtime in this order:
 
-- `/Users/Shared/lua-lunet/lunet/build/<os>/<arch>/debug/lunet-run`
+- `INSTRUMENTED_LUNET_BIN` (explicit, recommended)
+- `LUNET_SRC_DIR/build/<os>/<arch>/debug/lunet-run`
+- `.tmp/src/lunet-*/build/<os>/<arch>/debug/lunet-run`
+- fallback (developer workstation convenience): `/Users/Shared/lua-lunet/lunet/build/<os>/<arch>/debug/lunet-run`
 
 You can pass explicit instrumented runtime paths:
 

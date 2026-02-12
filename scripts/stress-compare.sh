@@ -33,7 +33,29 @@ detect_instrumented_runtime() {
         *) return 1 ;;
     esac
 
-    local candidate="/Users/Shared/lua-lunet/lunet/build/${os_part}/${arch_part}/debug/lunet-run"
+    local candidate
+
+    # Prefer an explicit Lunet source tree if provided.
+    if [ -n "${LUNET_SRC_DIR:-}" ]; then
+        candidate="${LUNET_SRC_DIR}/build/${os_part}/${arch_part}/debug/lunet-run"
+        if [ -x "$candidate" ]; then
+            echo "$candidate"
+            return 0
+        fi
+    fi
+
+    # Common location when building Lunet via this repo's setup flow (if you built an instrumented profile there).
+    shopt -s nullglob
+    local p
+    for p in "$ROOT_DIR/.tmp/src"/lunet-*/build/"$os_part"/"$arch_part"/debug/lunet-run; do
+        if [ -x "$p" ]; then
+            echo "$p"
+            return 0
+        fi
+    done
+
+    # Convenience fallback for the typical dev checkout location on this workstation.
+    candidate="/Users/Shared/lua-lunet/lunet/build/${os_part}/${arch_part}/debug/lunet-run"
     if [ -x "$candidate" ]; then
         echo "$candidate"
         return 0

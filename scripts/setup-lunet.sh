@@ -6,6 +6,12 @@ PINNED_LUNET_REF_DEFAULT="6303e54e3a52a6aed30bdff058d7d77535e076aa"
 LUNET_REF="${LUNET_REF:-${LUNET_VERSION:-$PINNED_LUNET_REF_DEFAULT}}"
 LUNET_USE_PREBUILT="${LUNET_USE_PREBUILT:-0}"
 
+# This repo must not rely on sibling checkouts like ../lunet.
+# Some dev environments may still have a leftover symlink at ./lunet; warn, but ignore it.
+if [ -L "$ROOT_DIR/lunet" ]; then
+    echo "WARN: Found symlink $ROOT_DIR/lunet. This repo does not use sibling Lunet checkouts; using GitHub source via .tmp instead." >&2
+fi
+
 ref_slug() {
     printf "%s" "$1" | tr '/:' '__' | tr -c '[:alnum:]._-' '_'
 }
