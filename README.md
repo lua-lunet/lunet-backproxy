@@ -1,5 +1,7 @@
 # Lunet Backproxy
 
+[![Lunet v0.1.2](https://img.shields.io/badge/Lunet-v0.1.2-blue?logo=lua&logoColor=white)](https://github.com/lua-lunet/lunet/releases/tag/v0.1.2)
+
 Secure reverse outbound proxy for DMZ topologies.
 
 This project demonstrates a security model where internal services never accept inbound network connections. Internal workers connect out to the DMZ broker, and HTTP requests are tunneled over those outbound connections.

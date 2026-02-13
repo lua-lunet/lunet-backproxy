@@ -8,7 +8,7 @@ This is a **Lua-only project** using **xmake** for build automation.
 
 ## Build And Runtime Policy
 
-This repository is pinned to **Lunet commit `6303e54e3a52a6aed30bdff058d7d77535e076aa`** and must not depend on ad-hoc local Lunet trees.
+This repository is pinned to **Lunet release tag `v0.1.2`** and must not depend on ad-hoc local Lunet trees.
 
 - Primary setup command:
   ```bash
@@ -21,8 +21,10 @@ This repository is pinned to **Lunet commit `6303e54e3a52a6aed30bdff058d7d77535e
 
 Runtime bootstrap rules:
 - Use `scripts/setup-lunet.sh` and `scripts/lunet-env.sh`.
-- Default to building from `github.com/lua-lunet/lunet` at the pinned commit above.
-- Prebuilt assets are opt-in only (`LUNET_USE_PREBUILT=1`) and intended for tagged release refs.
+- **Best practice**: Pin to a Lunet release tag (e.g., `v0.1.2`) for stability and reproducibility.
+- Commit hashes should only be used when testing a specific fix or unreleased feature; always upgrade to the nearest release tag.
+- Default to building from `github.com/lua-lunet/lunet` at the pinned release tag above.
+- Prebuilt assets are automatically downloaded when available (`LUNET_USE_PREBUILT=1`) for tagged release refs.
 - Do not rely on `../lunet` sibling checkouts or unpublished local Lunet changes.
 - Canonical Lunet xmake/instrumentation docs are upstream: https://github.com/lua-lunet/lunet/blob/main/docs/XMAKE_INTEGRATION.md
 

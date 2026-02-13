@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PINNED_LUNET_REF_DEFAULT="6303e54e3a52a6aed30bdff058d7d77535e076aa"
+PINNED_LUNET_REF_DEFAULT="v0.1.2"
 LUNET_REF="${LUNET_REF:-${LUNET_VERSION:-$PINNED_LUNET_REF_DEFAULT}}"
 
 ref_slug() {
