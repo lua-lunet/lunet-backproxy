@@ -49,20 +49,20 @@ The secure deployment pattern is:
 
 ```mermaid
 flowchart LR
-    Client[Public client] --> NGINX[OpenResty or NGINX edge]
-    NGINX --> DMZ[DMZ backproxy]
+    Client["Public client"] --> NGINX["OpenResty or NGINX edge"]
+    NGINX --> DMZ["DMZ backproxy"]
 
-    subgraph FW[Firewall policy]
-      Rule[Block inbound to secure zone]
-      Rule2[Allow outbound from secure zone]
+    subgraph FW["Firewall policy"]
+      Rule["Block inbound to secure zone"]
+      Rule2["Allow outbound from secure zone"]
     end
 
-    subgraph Secure[Secure zone]
-      Worker[Internal worker]
+    subgraph Secure["Secure zone"]
+      Worker["Internal worker"]
       DB[(Local data store)]
     end
 
-    Worker -. outbound tcp tunnel .-> DMZ
+    Worker -. "outbound tcp tunnel" .-> DMZ
     Worker --> DB
 ```
 
@@ -72,9 +72,9 @@ flowchart LR
 sequenceDiagram
     autonumber
     participant C as Client
-    participant D as DMZ backproxy
-    participant W as Internal worker
-    participant S as Local service data
+    participant D as "DMZ backproxy"
+    participant W as "Internal worker"
+    participant S as "Local service data"
 
     Note over W,D: Startup
     W->>D: TCP connect outbound
