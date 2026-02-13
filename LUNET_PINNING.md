@@ -141,3 +141,23 @@ When new Lunet versions are released:
 ---
 
 This policy ensures lunet-backproxy is always built with a well-tested, stable Lunet version while remaining flexible for debugging and testing.
+
+## Advanced: Instrumented Builds (Optional)
+
+For development, consider building Lunet with instrumentation (ASan, trace, etc.). See [Lunet XMAKE_INTEGRATION.md](https://github.com/lua-lunet/lunet/blob/main/docs/XMAKE_INTEGRATION.md) for details.
+
+**Key insight**: Instrumentation adds <10% overhead on many workloads, making it worthwhile for development and QA. Final release testing should use stripped builds.
+
+```bash
+# Dev build with ASan (catches memory errors)
+cd .tmp/src/lunet-v0.1.2
+xmake f -P . -m release --lunet_asan=y
+xmake build -P .
+
+# Use it
+export LUNET_BIN=$(pwd)/build/release/lunet-run
+cd /path/to/lunet-backproxy
+xmake test
+```
+
+Then for release testing, fall back to the standard (stripped) build by unsetting `LUNET_BIN`.
