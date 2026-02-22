@@ -161,3 +161,20 @@ xmake test
 ```
 
 Then for release testing, fall back to the standard (stripped) build by unsetting `LUNET_BIN`.
+
+### Runtime safety knobs and rationale
+
+These knobs are intentionally included for debugging and QA:
+
+- **Apple allocator debugging (macOS):**
+  `LUNET_ENABLE_APPLE_MALLOC_DEBUG=1` enables `MallocScribble`, `MallocPreScribble`, heap checks, and stack logging defaults in `scripts/lunet-env.sh`. These are explicitly useful for surfacing use-after-free and heap corruption patterns.
+- **Rust sanitizers for Lunet source builds:**
+  `LUNET_RUST_SANITIZER=asan|tsan` enables `-Zsanitizer` flags in `scripts/setup-lunet.sh` and defaults `RUSTUP_TOOLCHAIN` to `nightly` when unset, because those sanitizer flows depend on nightly.
+- **Lua C module loader verification:**
+  `scripts/setup-lunet.sh` performs a loader check (`require("lunet")`, `require("lunet.sqlite3")`) using the runtime's `LUA_CPATH`. This catches "compiled but not loadable" failures (including wrong search paths and missing `luaopen_*` exports).
+
+Disable loader validation only when diagnosing bootstrap internals:
+
+```bash
+LUNET_SKIP_LOADER_CHECK=1 xmake run setup-lunet
+```

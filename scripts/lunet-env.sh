@@ -31,3 +31,21 @@ RUNTIME_DIR="$ROOT_DIR/.tmp/runtime/lunet-${REF_SLUG}"
 export LUNET_BIN="$RUNTIME_DIR/bin/lunet"
 export LUA_CPATH="$RUNTIME_DIR/lib/?.so;$RUNTIME_DIR/lib/?/?.so;;${LUA_CPATH:-}"
 export LUNET_RUNTIME_REF="$LUNET_REF"
+
+apply_apple_malloc_debug() {
+    if [ "${LUNET_ENABLE_APPLE_MALLOC_DEBUG:-0}" != "1" ]; then
+        return 0
+    fi
+    if [ "$(uname -s)" != "Darwin" ]; then
+        return 0
+    fi
+
+    # Apple allocator debug envs help expose UAF and heap corruption issues.
+    export MallocScribble="${MallocScribble:-1}"
+    export MallocPreScribble="${MallocPreScribble:-1}"
+    export MallocCheckHeapStart="${MallocCheckHeapStart:-1}"
+    export MallocCheckHeapEach="${MallocCheckHeapEach:-1}"
+    export MallocStackLogging="${MallocStackLogging:-1}"
+}
+
+apply_apple_malloc_debug

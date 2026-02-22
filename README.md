@@ -382,6 +382,21 @@ xmake run run-dmz
 - `LUNET_BIN` optional explicit runtime binary path (useful for instrumented runs)
 - `LUA_CPATH` optional explicit module path when using custom `LUNET_BIN`
 
+### Runtime safety knobs (optional)
+
+- `LUNET_ENABLE_APPLE_MALLOC_DEBUG=1` enables Apple allocator debugging env vars on macOS (`MallocScribble`, `MallocPreScribble`, heap checks, stack logging) for stronger use-after-free and heap-corruption signal in development.
+- `LUNET_RUST_SANITIZER=asan|tsan` enables Rust `-Zsanitizer` flags when building Lunet from source (`LUNET_USE_PREBUILT=0`). These workflows require a nightly toolchain.
+- `LUNET_ENABLE_LUNET_ASAN=1` forwards `--lunet_asan=y` to Lunet's xmake config during source builds.
+- `LUNET_SKIP_LOADER_CHECK=1` disables the post-build loader validation (not recommended).
+
+`scripts/setup-lunet.sh` runs a loader check after preparing runtime artifacts:
+
+- it launches the selected runtime
+- sets `package.cpath` via `LUA_CPATH`
+- verifies `require("lunet")` and `require("lunet.sqlite3")` succeed
+
+This catches the "build succeeded, but module cannot load" class of failures (for example wrong `package.cpath` or missing `luaopen_*` exports).
+
 ## Notes
 
 - Testing and runtime scripts use only Lua, xmake, and shell tooling in this repo

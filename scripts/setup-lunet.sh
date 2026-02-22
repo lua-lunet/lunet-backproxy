@@ -5,6 +5,47 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PINNED_LUNET_REF_DEFAULT="6303e54e3a52a6aed30bdff058d7d77535e076aa"
 LUNET_REF="${LUNET_REF:-${LUNET_VERSION:-$PINNED_LUNET_REF_DEFAULT}}"
 LUNET_USE_PREBUILT="${LUNET_USE_PREBUILT:-0}"
+LUNET_RUST_SANITIZER="${LUNET_RUST_SANITIZER:-}"
+LUNET_SKIP_LOADER_CHECK="${LUNET_SKIP_LOADER_CHECK:-0}"
+
+normalize_rust_sanitizer() {
+    case "$1" in
+        "")
+            printf "%s" ""
+            ;;
+        asan|address)
+            printf "%s" "address"
+            ;;
+        tsan|thread)
+            printf "%s" "thread"
+            ;;
+        *)
+            echo "Unsupported LUNET_RUST_SANITIZER='$1' (supported: asan, tsan)." >&2
+            exit 1
+            ;;
+    esac
+}
+
+append_rust_flag() {
+    local flag="$1"
+    if [ -z "${RUSTFLAGS:-}" ]; then
+        export RUSTFLAGS="$flag"
+    else
+        export RUSTFLAGS="${RUSTFLAGS} $flag"
+    fi
+}
+
+configure_rust_sanitizer_env() {
+    local sanitizer="$1"
+    if [ -z "$sanitizer" ]; then
+        return 0
+    fi
+    if [ -z "${RUSTUP_TOOLCHAIN:-}" ]; then
+        export RUSTUP_TOOLCHAIN="nightly"
+    fi
+    append_rust_flag "-Zsanitizer=${sanitizer}"
+    echo "Enabled Rust sanitizer '${sanitizer}' (nightly toolchain is required for -Zsanitizer)."
+}
 
 # This repo must not rely on sibling checkouts like ../lunet.
 # Some dev environments may still have a leftover symlink at ./lunet; warn, but ignore it.
@@ -19,6 +60,7 @@ ref_slug() {
 REF_SLUG="$(ref_slug "$LUNET_REF")"
 RUNTIME_DIR="$ROOT_DIR/.tmp/runtime/lunet-${REF_SLUG}"
 SRC_DIR="$ROOT_DIR/.tmp/src/lunet-${REF_SLUG}"
+RUST_SANITIZER_KIND="$(normalize_rust_sanitizer "$LUNET_RUST_SANITIZER")"
 
 mkdir -p "$ROOT_DIR/.tmp/runtime" "$ROOT_DIR/.tmp/src"
 
@@ -73,8 +115,47 @@ runtime_matches_host() {
     return 0
 }
 
+validate_runtime_loader() {
+    if [ "$LUNET_SKIP_LOADER_CHECK" = "1" ]; then
+        return 0
+    fi
+    if [ ! -x "$RUNTIME_DIR/bin/lunet" ]; then
+        return 1
+    fi
+
+    local check_script="$ROOT_DIR/.tmp/lua-loader-check-${REF_SLUG}.lua"
+    cat >"$check_script" <<'LUA'
+local modules = {
+    "lunet",
+    "lunet.sqlite3",
+}
+
+for _, name in ipairs(modules) do
+    local ok, mod_or_err = pcall(require, name)
+    if not ok then
+        io.stderr:write(string.format("loader-check failed: require(%q): %s\n", name, tostring(mod_or_err)))
+        os.exit(1)
+    end
+end
+
+print("loader-check ok: lunet + lunet.sqlite3")
+LUA
+
+    local saved_lua_cpath="${LUA_CPATH:-}"
+    export LUA_CPATH="$RUNTIME_DIR/lib/?.so;$RUNTIME_DIR/lib/?/?.so;;${saved_lua_cpath}"
+
+    if ! "$RUNTIME_DIR/bin/lunet" "$check_script"; then
+        echo "Lunet module loader check failed. Verify package.cpath and luaopen_* exports." >&2
+        rm -f "$check_script"
+        return 1
+    fi
+    rm -f "$check_script"
+    return 0
+}
+
 if runtime_matches_host; then
     echo "Lunet runtime already prepared: $RUNTIME_DIR"
+    validate_runtime_loader
     exit 0
 fi
 
@@ -116,6 +197,7 @@ if [ -n "$ASSET_NAME" ]; then
     cp "$SQLITE_SO_SRC" "$RUNTIME_DIR/lib/lunet/sqlite3.so"
 else
     echo "Building Lunet from github.com/lua-lunet/lunet ref ${LUNET_REF}"
+    configure_rust_sanitizer_env "$RUST_SANITIZER_KIND"
 
     if ! command -v git >/dev/null 2>&1; then
         echo "Missing required tool: git"
@@ -136,7 +218,11 @@ else
     (
         cd "$SRC_DIR"
         unset XMAKE_PROJECT_DIR
-        xmake f -P . -m release --lunet_trace=n --lunet_verbose_trace=n -y
+        xmake_config_args=(-P . -m release --lunet_trace=n --lunet_verbose_trace=n -y)
+        if [ "$RUST_SANITIZER_KIND" = "address" ] || [ "${LUNET_ENABLE_LUNET_ASAN:-0}" = "1" ]; then
+            xmake_config_args+=(--lunet_asan=y)
+        fi
+        xmake f "${xmake_config_args[@]}"
         xmake build -P .
         xmake build -P . lunet-sqlite3
     )
@@ -157,6 +243,7 @@ fi
 
 chmod +x "$RUNTIME_DIR/bin/lunet"
 echo "$LUNET_REF" > "$RUNTIME_DIR/.version"
+validate_runtime_loader
 
 echo "Prepared Lunet runtime at $RUNTIME_DIR"
 echo "LUNET_BIN=$RUNTIME_DIR/bin/lunet"
