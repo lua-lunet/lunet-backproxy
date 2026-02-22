@@ -6,6 +6,17 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      target_ref:
+        description: "Branch, tag, or commit SHA to run CI against"
+        required: false
+        default: ""
+        type: string
+      include_windows:
+        description: "Run optional Windows smoke job"
+        required: false
+        default: true
+        type: boolean
 
 jobs:
   test:
@@ -24,6 +35,19 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.target_ref == '' }}
+
+      - uses: actions/checkout@v4
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.target_ref != '' }}
+        with:
+          ref: ${{ inputs.target_ref }}
+
+      - name: Show selected revision
+        run: |
+          echo "event=${{ github.event_name }}"
+          echo "target_ref_input=${{ github.event_name == 'workflow_dispatch' && inputs.target_ref || 'n/a' }}"
+          git rev-parse HEAD
+          git show -s --format='%h %d %s'
 
       - uses: xmake-io/github-action-setup-xmake@v1
         with:
@@ -59,3 +83,44 @@ jobs:
           ENABLE_CONDUIT_DEMO: "1"
         run: |
           xmake test
+
+  windows-smoke:
+    name: windows-smoke
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.include_windows }}
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        if: ${{ inputs.target_ref == '' }}
+
+      - uses: actions/checkout@v4
+        if: ${{ inputs.target_ref != '' }}
+        with:
+          ref: ${{ inputs.target_ref }}
+
+      - name: Show selected revision
+        shell: bash
+        run: |
+          echo "event=${{ github.event_name }}"
+          echo "target_ref_input=${{ inputs.target_ref }}"
+          git rev-parse HEAD
+          git show -s --format='%h %d %s'
+
+      - uses: xmake-io/github-action-setup-xmake@v1
+        with:
+          xmake-version: latest
+
+      - name: Check xmake availability
+        shell: pwsh
+        run: |
+          xmake --version
+
+      - name: Validate shell script syntax
+        shell: bash
+        run: |
+          bash -n scripts/setup-lunet.sh \
+            scripts/lunet-env.sh \
+            scripts/run-tests.sh \
+            scripts/start-dmz.sh \
+            scripts/start-internal.sh \
+            scripts/start-echo.sh
