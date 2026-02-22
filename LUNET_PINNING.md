@@ -161,3 +161,55 @@ xmake test
 ```
 
 Then for release testing, fall back to the standard (stripped) build by unsetting `LUNET_BIN`.
+
+## Language Runtime Check Knobs
+
+`scripts/runtime-checks-env.sh` provides optional diagnostic knobs that
+can be activated before running tests or the application.  Source it
+(or let `scripts/run-tests.sh` source it automatically) and set the
+env vars below.
+
+### macOS Allocator Debugging (`BACKPROXY_MALLOC_DEBUG=1`)
+
+Apple's allocator exposes env vars that catch use-after-free and heap
+corruption at the system level.  These are extremely useful when
+developing or testing C modules (lunet.so, sqlite3.so).
+
+```bash
+BACKPROXY_MALLOC_DEBUG=1 xmake test
+```
+
+This sets `MallocScribble`, `MallocPreScribble`, `MallocGuardEdges`,
+`MallocStackLogging=lite`, and periodic heap checks.  Only active on
+macOS; silently ignored on Linux.
+
+### ASan / TSan Build Hints (`BACKPROXY_ASAN_HINTS=1`)
+
+Prints step-by-step instructions for building Lunet (or hypothetical
+Rust components) with Address Sanitizer or Thread Sanitizer.
+
+```bash
+BACKPROXY_ASAN_HINTS=1 source scripts/runtime-checks-env.sh
+```
+
+For Rust code interfacing with C, sanitizers require nightly
+(`-Zsanitizer=address`).  This project is pure Lua/C, but the guidance
+is included for completeness.
+
+### Lua C-Module Loader Check (`BACKPROXY_CMODULE_CHECK=1`)
+
+Validates that every C module (.so) the project depends on can actually
+be loaded via `require()` and exports the expected `luaopen_*` symbol.
+This catches "it compiles but can't be loaded" failures early.
+
+```bash
+# Enabled by default in run-tests.sh; disable with:
+BACKPROXY_CMODULE_CHECK=0 xmake test
+```
+
+The test lives at `test/test_cmodule_loader.lua` and checks:
+- `package.cpath` is non-empty and contains `.so`/`.dylib` patterns
+- `require("lunet")` and `require("lunet.socket")` load and expose expected APIs
+- `require("lunet.sqlite3")` loads (if present)
+- FFI and libsodium are available (if the runtime supports them)
+- Bogus module names fail with informative path-related errors

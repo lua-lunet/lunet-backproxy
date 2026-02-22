@@ -5,6 +5,16 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 source "$ROOT_DIR/scripts/lunet-env.sh"
+source "$ROOT_DIR/scripts/runtime-checks-env.sh"
+
+# C-module loader validation runs first when requested or always as a
+# lightweight smoke-test so "compiles but can't load" failures surface
+# before the full suite.
+BACKPROXY_CMODULE_CHECK="${BACKPROXY_CMODULE_CHECK:-1}"
+if [ "$BACKPROXY_CMODULE_CHECK" = "1" ]; then
+    echo "Running C-module loader validation..."
+    "$LUNET_BIN" "$ROOT_DIR/test/test_cmodule_loader.lua"
+fi
 
 tests=(
     "test/test_peer_guard.lua"
