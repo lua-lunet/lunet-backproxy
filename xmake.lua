@@ -14,10 +14,10 @@ local function find_lunet_bin(xos)
         return env_bin
     end
 
-    for _, f in ipairs(runtime_os.files(path.join(".tmp", "runtime", "lunet-*", "bin", "lunet"))) do
+    for _, f in ipairs(runtime_os.files(path.join(".lunet", "*", "lunet-run"))) do
         return f
     end
-    for _, f in ipairs(runtime_os.files(path.join(".tmp", "runtime", "lunet-*", "bin", "lunet-run"))) do
+    for _, f in ipairs(runtime_os.files(path.join(".lunet", "*", "lunet"))) do
         return f
     end
     return nil
@@ -33,7 +33,7 @@ local function ensure_lunet_runtime(xos)
     run_cmd("bash", {"scripts/setup-lunet.sh"}, runtime_os)
     lunet_bin = find_lunet_bin(runtime_os)
     if not lunet_bin then
-        runtime_os.raise("Lunet runtime not found after setup-lunet. Expected .tmp/runtime/lunet-*/bin/lunet")
+        runtime_os.raise("Lunet runtime not found after setup-lunet. Expected .lunet/<tag>/lunet-run")
     end
     return lunet_bin
 end

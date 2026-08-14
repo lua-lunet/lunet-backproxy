@@ -2,12 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PINNED_LUNET_REF_DEFAULT="v0.1.2"
-LUNET_REF="${LUNET_REF:-${LUNET_VERSION:-$PINNED_LUNET_REF_DEFAULT}}"
-
-ref_slug() {
-    printf "%s" "$1" | tr '/:' '__' | tr -c '[:alnum:]._-' '_'
-}
+LUNET_TAG="v0.9.2"
 
 # Respect externally provided runtime binaries (e.g. instrumented Lunet builds).
 if [ -n "${LUNET_BIN:-}" ] && [ -x "$LUNET_BIN" ]; then
@@ -23,11 +18,9 @@ if [ -n "${LUNET_BIN:-}" ] && [ -x "$LUNET_BIN" ]; then
     fi
 fi
 
-REF_SLUG="$(ref_slug "$LUNET_REF")"
-RUNTIME_DIR="$ROOT_DIR/.tmp/runtime/lunet-${REF_SLUG}"
+"$ROOT_DIR/scripts/setup-lunet.sh" >/dev/null
 
-"$ROOT_DIR/scripts/setup-lunet.sh"
-
-export LUNET_BIN="$RUNTIME_DIR/bin/lunet"
-export LUA_CPATH="$RUNTIME_DIR/lib/?.so;$RUNTIME_DIR/lib/?/?.so;;${LUA_CPATH:-}"
-export LUNET_RUNTIME_REF="$LUNET_REF"
+export LUNET_BIN="$ROOT_DIR/.lunet/$LUNET_TAG/lunet-run"
+export LUNET_RUNTIME_REF="$LUNET_TAG"
+# No LUA_CPATH: the release archive is self-contained; lunet-run resolves
+# lunet.so and lunet/*.so relative to its own directory.
