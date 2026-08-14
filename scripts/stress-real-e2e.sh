@@ -37,15 +37,59 @@ if [ "$(uname -s)" = "Darwin" ] && [ -f "/opt/homebrew/lib/libsodium.dylib" ]; t
     export DYLD_LIBRARY_PATH="/opt/homebrew/lib:${DYLD_LIBRARY_PATH:-}"
 fi
 
+port_listening() {
+    lsof -nP -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1
+}
+
+if port_listening "$HTTP_PORT" || port_listening "$BACKFLOW_PORT"; then
+    echo "ERROR: HTTP_PORT=$HTTP_PORT or BACKFLOW_PORT=$BACKFLOW_PORT already listening; refusing to test a stale runtime" >&2
+    exit 2
+fi
+
+HAVE_SETSID=0
+if command -v setsid >/dev/null 2>&1; then
+    HAVE_SETSID=1
+fi
+
+# Kill the whole process group so detached lunet-run children die too; a plain
+# kill of the wrapper subshell PID lets lunet-run reparent to init and keep the
+# ports held, which makes a later run silently test a stale runtime.
+start_runtime() {
+    if [ "$HAVE_SETSID" -eq 1 ]; then
+        setsid "$@"
+    else
+        "$@"
+    fi
+}
+
 cleanup() {
-    if [ -n "${INT_PID:-}" ]; then
-        kill "$INT_PID" 2>/dev/null || true
-        wait "$INT_PID" 2>/dev/null || true
+    local i
+    if [ "$HAVE_SETSID" -eq 1 ]; then
+        [ -n "${DMZ_PID:-}" ] && kill -- "-$DMZ_PID" 2>/dev/null || true
+        [ -n "${INT_PID:-}" ] && kill -- "-$INT_PID" 2>/dev/null || true
+    else
+        # No setsid (macOS): target the exact launched command paths.
+        pkill -f "$LUNET_BIN $ROOT_DIR/app/dmz/main.lua" 2>/dev/null || true
+        pkill -f "$LUNET_BIN $ROOT_DIR/app/internal/main.lua" 2>/dev/null || true
     fi
-    if [ -n "${DMZ_PID:-}" ]; then
-        kill "$DMZ_PID" 2>/dev/null || true
-        wait "$DMZ_PID" 2>/dev/null || true
+    for _ in $(seq 1 20); do
+        if ! port_listening "$HTTP_PORT" && ! port_listening "$BACKFLOW_PORT"; then
+            break
+        fi
+        if [ "$HAVE_SETSID" -eq 1 ]; then
+            [ -n "${DMZ_PID:-}" ] && kill -9 -- "-$DMZ_PID" 2>/dev/null || true
+            [ -n "${INT_PID:-}" ] && kill -9 -- "-$INT_PID" 2>/dev/null || true
+        else
+            pkill -9 -f "$LUNET_BIN $ROOT_DIR/app/dmz/main.lua" 2>/dev/null || true
+            pkill -9 -f "$LUNET_BIN $ROOT_DIR/app/internal/main.lua" 2>/dev/null || true
+        fi
+        sleep 0.5
+    done
+    if port_listening "$HTTP_PORT" || port_listening "$BACKFLOW_PORT"; then
+        echo "WARNING: ports $HTTP_PORT/$BACKFLOW_PORT still bound after cleanup" >&2
     fi
+    [ -n "${DMZ_PID:-}" ] && wait "$DMZ_PID" 2>/dev/null || true
+    [ -n "${INT_PID:-}" ] && wait "$INT_PID" 2>/dev/null || true
 }
 trap cleanup EXIT
 
@@ -61,7 +105,7 @@ echo "out_dir=$OUT_DIR" | tee -a "$SUMMARY_LOG"
     export BACKFLOW_PORT
     export SERVICE_NAME
     export UNIX_SOCKET="$OUT_DIR/backproxy.sock"
-    "$LUNET_BIN" "$ROOT_DIR/app/dmz/main.lua"
+    start_runtime "$LUNET_BIN" "$ROOT_DIR/app/dmz/main.lua"
 ) >"$DMZ_LOG" 2>&1 &
 DMZ_PID=$!
 
@@ -74,7 +118,7 @@ DMZ_PID=$!
     export DB_POOL_SIZE
     export DB_PATH="$OUT_DIR/conduit.sqlite3"
     export JWT_SECRET='stress-dev-secret'
-    "$LUNET_BIN" "$ROOT_DIR/app/internal/main.lua"
+    start_runtime "$LUNET_BIN" "$ROOT_DIR/app/internal/main.lua"
 ) >"$INTERNAL_LOG" 2>&1 &
 INT_PID=$!
 
