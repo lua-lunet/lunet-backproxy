@@ -168,6 +168,11 @@ SERVICE_NAME=myservice xmake run run-dmz
 
 ## Local quick start
 
+Host prerequisites: the fetched runtime dynamically links libuv (Linux: the
+`libuv1` package; macOS: Homebrew `luajit`, `libuv`, `zlib` at the standard
+`/opt/homebrew` paths), plus a Lua 5.1+ interpreter (or xmake) to run the
+fetcher.
+
 ### 1) Prepare runtime
 
 ```bash

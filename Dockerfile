@@ -7,6 +7,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     git \
     jq \
+    libuv1 \
     sqlite3 \
     luajit \
     && rm -rf /var/lib/apt/lists/*

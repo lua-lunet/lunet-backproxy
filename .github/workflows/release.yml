@@ -36,12 +36,12 @@ jobs:
       - name: Install Dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get update && sudo apt-get install -y sqlite3 luajit curl git jq
+          sudo apt-get update && sudo apt-get install -y sqlite3 luajit libuv1 curl git jq
 
       - name: Install Dependencies (macOS)
         if: runner.os == 'macOS'
         run: |
-          brew install sqlite jq luajit
+          brew install luajit libuv zlib sqlite jq
 
       - name: Prepare Runtime
         run: |
