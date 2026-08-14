@@ -1,6 +1,6 @@
 # Lunet Backproxy
 
-[![Lunet v0.1.2](https://img.shields.io/badge/Lunet-v0.1.2-blue?logo=lua&logoColor=white)](https://github.com/lua-lunet/lunet/releases/tag/v0.1.2)
+[![Lunet v0.9.2](https://img.shields.io/badge/Lunet-v0.9.2-blue?logo=lua&logoColor=white)](https://github.com/lua-lunet/lunet/releases/tag/v0.9.2)
 
 Secure reverse outbound proxy for DMZ topologies.
 
@@ -94,17 +94,15 @@ sequenceDiagram
 
 ## Runtime policy
 
-This repo is pinned to Lunet commit:
+This repo is pinned to Lunet release tag `v0.9.2`, consumed as a verified binary release.
 
-- `6303e54e3a52a6aed30bdff058d7d77535e076aa`
-
-Default setup builds that exact upstream ref from GitHub source and stages a local runtime under `.tmp/runtime`.
-
-- `scripts/setup-lunet.sh` prepares the pinned runtime from `https://github.com/lua-lunet/lunet`
+- `xmake run setup-lunet` fetches the official release via `scripts/lunet_fetch_release_v0.9.2.lua`
+- The fetcher verifies the archive SHA-256 against GitHub release metadata before extraction and fails closed on mismatch
+- The runtime is staged idempotently under `.lunet/v0.9.2/` (`lunet-run`, `lunet.so`, `lunet/*.so`, `types/`, docs)
+- `lunet-run` self-resolves `require("lunet")` / `lunet.*` modules; no `LUA_CPATH` setup is needed for the fetched runtime
+- `.lunet/v0.9.2/types/` ships LuaCATS (`*.lua`) and Teal (`*.d.tl`) declarations for editor/typed-Lua support; point your editor workspace library there (app code stays plain Lua by design)
 - No local sibling `../lunet` checkout is required
-- To intentionally override, set:
-  - `LUNET_REF=<tag-or-commit>`
-  - `LUNET_USE_PREBUILT=1` (only for release tags that publish assets)
+- To intentionally use an instrumented or custom build, set `LUNET_BIN=/path/to/lunet-run` (add `LUA_CPATH` if that layout needs it); the `stress-compare` flow is unchanged (`INSTRUMENTED_LUNET_BIN` etc.)
 
 Canonical Lunet build, tracing, and ASan workflows live upstream:
 
@@ -377,15 +375,12 @@ xmake run run-dmz
 
 ### Runtime selection
 
-- `LUNET_REF` default `6303e54e3a52a6aed30bdff058d7d77535e076aa`
-- `LUNET_USE_PREBUILT` default `0`
-- `LUNET_BIN` optional explicit runtime binary path (useful for instrumented runs)
+- `LUNET_BIN` optional explicit runtime binary path (instrumented or custom builds)
 - `LUA_CPATH` optional explicit module path when using custom `LUNET_BIN`
 
 ## Notes
 
 - Testing and runtime scripts use only Lua, xmake, and shell tooling in this repo
-- Historical `v0.1.0` crash reproduction harness remains in repo: `scripts/repro-segfault-v010.sh`
-- This repo now defaults to the fixed upstream Lunet commit listed above
+- The `conduit` demo uses SQLite bind parameters; `db.escape` was removed upstream in Lunet and is not used here
 - Peer identity checks are a host-trust control for Unix sockets. They are not a perimeter replacement and can be bypassed by host root.
 - Linux `/proc` checks require a runtime that can supply peer PID/UID/GID (`socket.getpeercred`). If unavailable, `enforce` mode rejects and `log` mode records the mismatch.
