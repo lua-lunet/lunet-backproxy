@@ -36,12 +36,14 @@ jobs:
       - name: Install Dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get update && sudo apt-get install -y sqlite3 luajit libuv1 curl git jq
+          sudo apt-get update && sudo apt-get install -y sqlite3 luajit libuv1 libsodium23 curl git jq
+          sudo ln -s libsodium.so.23 "$(dirname "$(ldconfig -p | awk '/libsodium\.so\.23/{print $NF; exit}')")/libsodium.so"
+          sudo ldconfig
 
       - name: Install Dependencies (macOS)
         if: runner.os == 'macOS'
         run: |
-          brew install luajit libuv zlib sqlite jq
+          brew install luajit libuv zlib sqlite jq libsodium
 
       - name: Prepare Runtime
         run: |

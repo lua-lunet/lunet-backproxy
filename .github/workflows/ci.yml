@@ -37,14 +37,17 @@ jobs:
             sqlite3 \
             luajit \
             libuv1 \
+            libsodium23 \
             curl \
             git \
             jq
+          sudo ln -s libsodium.so.23 "$(dirname "$(ldconfig -p | awk '/libsodium\.so\.23/{print $NF; exit}')")/libsodium.so"
+          sudo ldconfig
 
       - name: Install Dependencies (macOS)
         if: runner.os == 'macOS'
         run: |
-          brew install luajit libuv zlib sqlite jq
+          brew install luajit libuv zlib sqlite jq libsodium
 
       - name: Prepare Runtime
         run: |
@@ -86,6 +89,29 @@ jobs:
           ./scripts/docker/load-gentle.sh /health
           ./scripts/docker/load-gentle.sh /hello
 
+      - name: Run conduit topology
+        run: |
+          docker compose --profile echo down -v
+          SERVICE_NAME=conduit docker compose --profile conduit up -d
+          state=""
+          for _ in $(seq 1 60); do
+            state="$(docker inspect --format '{{.State.Health.Status}}' lunet-backproxy-dmz 2>/dev/null || echo starting)"
+            [ "$state" = "healthy" ] && break
+            sleep 2
+          done
+          if [ "$state" != "healthy" ]; then
+            docker compose --profile conduit logs
+            exit 1
+          fi
+          for _ in $(seq 1 30); do
+            if docker compose --profile conduit logs internal-conduit 2>&1 | grep -q "registered worker service=conduit\|connected to DMZ"; then
+              break
+            fi
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:8080/api/tags
+          docker compose --profile conduit down -v
+
       - name: Tear down
         if: always()
-        run: docker compose --profile echo down -v
+        run: docker compose --profile echo --profile conduit down -v

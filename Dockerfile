@@ -7,9 +7,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     git \
     jq \
+    libsodium23 \
     libuv1 \
     sqlite3 \
     luajit \
+    && ln -s libsodium.so.23 "$(dirname "$(ldconfig -p | awk '/libsodium\.so\.23/{print $NF; exit}')")/libsodium.so" \
+    && ldconfig \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /opt/lunet-backproxy
