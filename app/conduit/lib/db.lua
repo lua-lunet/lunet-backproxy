@@ -72,30 +72,19 @@ function db.connect()
     return native.open(config)
 end
 
--- Escape function
-function db.escape(value)
-    if value == nil then
-        return "NULL"
-    elseif type(value) == "number" then
-        return tostring(value)
-    elseif type(value) == "boolean" then
-        return value and "1" or "0"
-    else
-        return "'" .. native.escape(tostring(value)) .. "'"
+-- Normalize values for bind parameters (booleans bind as integers, as the
+-- removed db.escape helper used to render them).
+local function bindable(val)
+    if type(val) == "boolean" then
+        return val and 1 or 0
     end
+    return val
 end
 
--- Interpolate: replace ? with escaped values
-function db.interpolate(sql, ...)
-    local args = {...}
-    local idx = 0
-    return sql:gsub("%?", function()
-        idx = idx + 1
-        return db.escape(args[idx])
-    end)
-end
-
--- Higher level query (handles connection and parameters)
+-- Higher level query (handles connection and parameters).
+-- Since Lunet v0.5.0 all drivers bind parameters natively on every entry
+-- point (sqlite3_bind_* / mysql_stmt_bind_param / PQexecParams); manual
+-- escaping and interpolation were removed upstream and must not return here.
 function db.query(sql, ...)
     local conn, err = get_conn()
     if not conn then
@@ -104,19 +93,13 @@ function db.query(sql, ...)
 
     local result, query_err
     if select("#", ...) > 0 then
-        -- Postgres and MySQL query_params don't support parameters yet, so interpolate manually
-        if config.driver == "postgres" or config.driver == "mysql" then
-            local interpolated = db.interpolate(sql, ...)
-            result, query_err = db.query_raw(conn, interpolated)
-        else
-            result, query_err = db.query_params(conn, sql, ...)
-        end
+        result, query_err = db.query_params(conn, sql, ...)
     else
         result, query_err = db.query_raw(conn, sql)
     end
-    
+
     release_conn(conn)
-    
+
     if not result then
         return nil, query_err or "query failed"
     end
@@ -132,19 +115,13 @@ function db.exec(sql, ...)
 
     local result, exec_err
     if select("#", ...) > 0 then
-        -- Postgres and MySQL exec_params don't support parameters yet, so interpolate manually
-        if config.driver == "postgres" or config.driver == "mysql" then
-            local interpolated = db.interpolate(sql, ...)
-            result, exec_err = db.exec_raw(conn, interpolated)
-        else
-            result, exec_err = db.exec_params(conn, sql, ...)
-        end
+        result, exec_err = db.exec_params(conn, sql, ...)
     else
         result, exec_err = db.exec_raw(conn, sql)
     end
-    
+
     release_conn(conn)
-    
+
     if not result then
         return nil, exec_err or "exec failed"
     end
@@ -159,60 +136,64 @@ function db.query_one(sql, ...)
     return result[1]
 end
 
--- Table helpers
+-- Table helpers (bind parameters only; column and table names are internal
+-- constants, never user input)
 function db.insert(table_name, data)
     local columns = {}
+    local placeholders = {}
     local values = {}
     for col, val in pairs(data) do
         columns[#columns + 1] = col
-        values[#values + 1] = db.escape(val)
+        placeholders[#placeholders + 1] = "?"
+        values[#values + 1] = bindable(val)
     end
-    
+
     -- PostgreSQL needs RETURNING to get the inserted id
     if config.driver == "postgres" then
         local sql = string.format(
             "INSERT INTO %s (%s) VALUES (%s) RETURNING id",
             table_name,
             table.concat(columns, ", "),
-            table.concat(values, ", ")
+            table.concat(placeholders, ", ")
         )
-        local rows, err = db.query(sql)
+        local rows, err = db.query(sql, unpack(values))
         if not rows or #rows == 0 then
             return nil, err
         end
         return { last_insert_id = rows[1].id, affected_rows = 1 }
     end
-    
+
     local sql = string.format(
         "INSERT INTO %s (%s) VALUES (%s)",
         table_name,
         table.concat(columns, ", "),
-        table.concat(values, ", ")
+        table.concat(placeholders, ", ")
     )
-    return db.exec(sql)
+    return db.exec(sql, unpack(values))
 end
 
 function db.update(table_name, data, where, ...)
     local sets = {}
+    local values = {}
     for col, val in pairs(data) do
-        sets[#sets + 1] = col .. " = " .. db.escape(val)
+        sets[#sets + 1] = col .. " = ?"
+        values[#values + 1] = bindable(val)
+    end
+    for i = 1, select("#", ...) do
+        values[#values + 1] = bindable((select(i, ...)))
     end
     local sql = string.format(
         "UPDATE %s SET %s WHERE %s",
         table_name,
         table.concat(sets, ", "),
-        db.interpolate(where, ...)
+        where
     )
-    return db.exec(sql)
+    return db.exec(sql, unpack(values))
 end
 
 function db.delete(table_name, where, ...)
-    local sql = string.format(
-        "DELETE FROM %s WHERE %s",
-        table_name,
-        db.interpolate(where, ...)
-    )
-    return db.exec(sql)
+    local sql = string.format("DELETE FROM %s WHERE %s", table_name, where)
+    return db.exec(sql, ...)
 end
 
 function db.init()

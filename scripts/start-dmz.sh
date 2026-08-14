@@ -12,4 +12,5 @@ export BACKFLOW_HOST=${BACKFLOW_HOST:-127.0.0.1}
 export BACKFLOW_PORT=${BACKFLOW_PORT:-9000}
 export SERVICE_NAME=${SERVICE_NAME:-conduit}
 
-"$LUNET_BIN" "$ROOT_DIR/app/dmz/main.lua"
+# shellcheck disable=SC2086
+exec "$LUNET_BIN" ${LUNET_RUN_EXTRA_ARGS:-} "$ROOT_DIR/app/dmz/main.lua"

@@ -2,6 +2,7 @@
 build/
 .build/
 .xmake/
+.lunet/
 *.o
 *.a
 *.so

@@ -3,6 +3,7 @@
 .tmp
 .xmake
 lunet
+.lunet/
 build
 *.sqlite3
 nginx/certs

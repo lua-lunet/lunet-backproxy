@@ -8,7 +8,7 @@ This is a **Lua-only project** using **xmake** for build automation.
 
 ## Build And Runtime Policy
 
-This repository is pinned to **Lunet release tag `v0.1.2`** and must not depend on ad-hoc local Lunet trees.
+This repository is pinned to **Lunet release tag `v0.9.2`** and must not depend on ad-hoc local Lunet trees.
 
 - Primary setup command:
   ```bash
@@ -21,10 +21,12 @@ This repository is pinned to **Lunet release tag `v0.1.2`** and must not depend 
 
 Runtime bootstrap rules:
 - Use `scripts/setup-lunet.sh` and `scripts/lunet-env.sh`.
-- **Best practice**: Pin to a Lunet release tag (e.g., `v0.1.2`) for stability and reproducibility.
-- Commit hashes should only be used when testing a specific fix or unreleased feature; always upgrade to the nearest release tag.
-- Default to building from `github.com/lua-lunet/lunet` at the pinned release tag above.
-- Prebuilt assets are automatically downloaded when available (`LUNET_USE_PREBUILT=1`) for tagged release refs.
+- **Best practice**: Pin to a Lunet release tag (e.g., `v0.9.2`) for stability and reproducibility.
+- Commit hashes should only be used when testing a specific fix or unreleased feature; always upgrade to the nearest release tag. Commit-hash testing means building upstream Lunet yourself and pointing `LUNET_BIN` at the result — this repo never clones or compiles Lunet.
+- Instrumented or custom Lunet builds are used by exporting `LUNET_BIN=/path/to/lunet-run` (plus `LUA_CPATH` if the custom layout needs it); `stress-compare` uses `INSTRUMENTED_LUNET_BIN`.
+- The installed runtime path `.lunet/v0.9.2/lunet-run` self-resolves its Lua/C modules (no `LUA_CPATH` needed for the fetched runtime).
+- Default acquisition is the vendored, SHA-256-verified release fetcher (`scripts/lunet_fetch_release_v0.9.2.lua`) installing into `.lunet/v0.9.2/`; there is no repo-local compilation of Lunet.
+- Typed-Lua support is consumed via `.lunet/v0.9.2/types/` (LuaCATS + Teal declarations) for editor/type checking only; do not convert app code to Teal without an explicit decision.
 - Do not rely on `../lunet` sibling checkouts or unpublished local Lunet changes.
 - Canonical Lunet xmake/instrumentation docs are upstream: https://github.com/lua-lunet/lunet/blob/main/docs/XMAKE_INTEGRATION.md
 

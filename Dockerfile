@@ -7,14 +7,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     git \
     jq \
+    libsodium23 \
+    libuv1 \
     sqlite3 \
-    xmake \
-    build-essential \
-    pkg-config \
-    libuv1-dev \
     luajit \
-    libluajit-5.1-dev \
-    libsodium-dev \
+    && ln -s libsodium.so.23 "$(dirname "$(ldconfig -p | awk '/libsodium\.so\.23/{print $NF; exit}')")/libsodium.so" \
+    && ldconfig \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /opt/lunet-backproxy
@@ -23,7 +21,5 @@ COPY . .
 
 RUN chmod +x scripts/*.sh scripts/docker/*.sh && \
     scripts/setup-lunet.sh
-
-ENV LUNET_VERSION=v0.1.0
 
 CMD ["bash", "-lc", "scripts/docker/run-dmz.sh"]

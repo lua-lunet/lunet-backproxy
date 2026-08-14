@@ -34,21 +34,20 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            build-essential \
-            pkg-config \
-            libuv1-dev \
-            luajit \
-            libluajit-5.1-dev \
             sqlite3 \
-            libsodium-dev \
+            luajit \
+            libuv1 \
+            libsodium23 \
             curl \
             git \
             jq
+          sudo ln -s libsodium.so.23 "$(dirname "$(ldconfig -p | awk '/libsodium\.so\.23/{print $NF; exit}')")/libsodium.so"
+          sudo ldconfig
 
       - name: Install Dependencies (macOS)
         if: runner.os == 'macOS'
         run: |
-          brew install libuv luajit sqlite libsodium coreutils git jq
+          brew install luajit libuv zlib sqlite jq libsodium
 
       - name: Prepare Runtime
         run: |
@@ -59,3 +58,60 @@ jobs:
           ENABLE_CONDUIT_DEMO: "1"
         run: |
           xmake test
+
+  compose-e2e:
+    name: compose-e2e-${{ matrix.name }}
+    runs-on: ${{ matrix.runs_on }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-amd64
+            runs_on: ubuntu-24.04
+          - name: linux-arm64
+            runs_on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and run echo topology
+        run: |
+          docker compose --profile echo up --build -d
+          state=""
+          for _ in $(seq 1 60); do
+            state="$(docker inspect --format '{{.State.Health.Status}}' lunet-backproxy-dmz 2>/dev/null || echo starting)"
+            [ "$state" = "healthy" ] && break
+            sleep 2
+          done
+          if [ "$state" != "healthy" ]; then
+            docker compose --profile echo logs
+            exit 1
+          fi
+          ./scripts/docker/load-gentle.sh /health
+          ./scripts/docker/load-gentle.sh /hello
+
+      - name: Run conduit topology
+        run: |
+          docker compose --profile echo down -v
+          SERVICE_NAME=conduit docker compose --profile conduit up -d
+          state=""
+          for _ in $(seq 1 60); do
+            state="$(docker inspect --format '{{.State.Health.Status}}' lunet-backproxy-dmz 2>/dev/null || echo starting)"
+            [ "$state" = "healthy" ] && break
+            sleep 2
+          done
+          if [ "$state" != "healthy" ]; then
+            docker compose --profile conduit logs
+            exit 1
+          fi
+          for _ in $(seq 1 30); do
+            if docker compose --profile conduit logs internal-conduit 2>&1 | grep -q "registered worker service=conduit\|connected to DMZ"; then
+              break
+            fi
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:8080/api/tags
+          docker compose --profile conduit down -v
+
+      - name: Tear down
+        if: always()
+        run: docker compose --profile echo --profile conduit down -v
