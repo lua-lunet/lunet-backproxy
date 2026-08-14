@@ -3,6 +3,7 @@ local log = require("app.common.log")
 local frame = require("app.common.frame")
 local http_rebuild = require("app.common.http_rebuild")
 local BufferedReader = require("app.common.buffered_reader")
+local resolve = require("app.common.resolve")
 
 local M = {}
 
@@ -26,7 +27,12 @@ local function safe_handle(raw, handler)
 end
 
 function M.run_one_worker(dmz_host, dmz_port, service_name, handler)
-    local conn, err = socket.connect(dmz_host, dmz_port)
+    local host, herr = resolve.resolve(dmz_host)
+    if not host then
+        return nil, herr
+    end
+
+    local conn, err = socket.connect(host, dmz_port)
     if not conn then
         return nil, "connect failed: " .. tostring(err)
     end
