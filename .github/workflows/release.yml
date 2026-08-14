@@ -8,9 +8,6 @@ on:
 permissions:
   contents: write
 
-env:
-  LUNET_VERSION: v0.1.0
-
 jobs:
   package:
     name: package-${{ matrix.name }}
@@ -39,23 +36,12 @@ jobs:
       - name: Install Dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential \
-            pkg-config \
-            libuv1-dev \
-            luajit \
-            libluajit-5.1-dev \
-            sqlite3 \
-            libsodium-dev \
-            curl \
-            git \
-            jq
+          sudo apt-get update && sudo apt-get install -y sqlite3 luajit curl git jq
 
       - name: Install Dependencies (macOS)
         if: runner.os == 'macOS'
         run: |
-          brew install libuv luajit sqlite libsodium coreutils git jq
+          brew install sqlite jq luajit
 
       - name: Prepare Runtime
         run: |
@@ -69,14 +55,9 @@ jobs:
 
       - name: Package Artifact
         run: |
-          mkdir -p dist/bin dist/lib
+          mkdir -p dist
 
-          RUNTIME_DIR=".tmp/runtime/lunet-${LUNET_VERSION}"
-          cp "$RUNTIME_DIR/bin/lunet" dist/bin/lunet
-          cp "$RUNTIME_DIR/lib/lunet.so" dist/lib/lunet.so
-          mkdir -p dist/lib/lunet
-          cp "$RUNTIME_DIR/lib/lunet/sqlite3.so" dist/lib/lunet/sqlite3.so
-
+          cp -R .lunet dist/.lunet
           cp -R app dist/app
           cp -R scripts dist/scripts
           cp README.md dist/README.md

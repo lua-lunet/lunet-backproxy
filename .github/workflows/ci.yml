@@ -34,13 +34,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            build-essential \
-            pkg-config \
-            libuv1-dev \
-            luajit \
-            libluajit-5.1-dev \
             sqlite3 \
-            libsodium-dev \
+            luajit \
             curl \
             git \
             jq
@@ -48,7 +43,7 @@ jobs:
       - name: Install Dependencies (macOS)
         if: runner.os == 'macOS'
         run: |
-          brew install libuv luajit sqlite libsodium coreutils git jq
+          brew install sqlite jq luajit
 
       - name: Prepare Runtime
         run: |
