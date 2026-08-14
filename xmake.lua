@@ -1,5 +1,5 @@
 set_project("lunet-backproxy")
-set_version("0.1.0")
+set_version("0.2.0")
 set_policy("compatibility.version", "3.0")
 
 local function run_cmd(cmd, argv, xos)
