@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-LUNET_TAG="v0.9.2"
+LUNET_TAG="v0.18.2"
 
 # Respect externally provided runtime binaries (e.g. instrumented Lunet builds).
 if [ -n "${LUNET_BIN:-}" ] && [ -x "$LUNET_BIN" ]; then

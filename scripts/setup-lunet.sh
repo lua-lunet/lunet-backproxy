@@ -7,7 +7,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # release fetcher (see scripts/lunet_fetch_release_<tag>.lua); this repo does
 # not clone or compile Lunet. To test an unreleased upstream revision, build it
 # yourself and point LUNET_BIN at it (see LUNET_PINNING.md).
-LUNET_TAG="v0.9.2"
+LUNET_TAG="v0.18.2"
 FETCHER="${LUNET_FETCHER:-$ROOT_DIR/scripts/lunet_fetch_release_${LUNET_TAG}.lua}"
 
 if [ ! -f "$FETCHER" ]; then

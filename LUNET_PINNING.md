@@ -2,8 +2,8 @@
 
 ## TL;DR
 
-- **Always pin to a release tag** (currently `v0.9.2`) for stability and reproducibility.
-- The pinned release is installed by a **vendored fetcher**, `scripts/lunet_fetch_release_v0.9.2.lua`, whose SHA-256 digests are verified against the GitHub release metadata before extraction.
+- **Always pin to a release tag** (currently `v0.18.2`) for stability and reproducibility.
+- The pinned release is installed by a **vendored fetcher**, `scripts/lunet_fetch_release_v0.18.2.lua`, whose SHA-256 digests are verified against the GitHub release metadata before extraction.
 - The repo **never clones or compiles Lunet**. Commit-hash testing happens outside the repo (see "Verified binaries vs custom builds").
 
 ## Why Release Tags?
@@ -17,12 +17,12 @@ Release tags are **stable, immutable, and guaranteed to work**:
 
 ## Current Setup
 
-**Pinned version**: `v0.9.2`
-**Fetcher**: `scripts/lunet_fetch_release_v0.9.2.lua` (vendored in the repo)
-**Install layout**: `.lunet/v0.9.2/`
+**Pinned version**: `v0.18.2`
+**Fetcher**: `scripts/lunet_fetch_release_v0.18.2.lua` (vendored in the repo)
+**Install layout**: `.lunet/v0.18.2/`
 
 ```
-.lunet/v0.9.2/
+.lunet/v0.18.2/
 ├── lunet-run        # runtime binary (the LUNET_BIN default)
 ├── lunet.so         # core C module
 ├── lunet/           # extension C modules (*.so, e.g. sqlite3.so)
@@ -34,9 +34,9 @@ Fetcher guarantees:
 - **Verified**: SHA-256 of each downloaded asset is checked against the GitHub release metadata before anything is extracted; any mismatch aborts the install.
 - **Fail-closed**: a partial or corrupt install is never left usable.
 - **Atomic**: extraction lands in a staging area and is moved into place only on success.
-- **Idempotent**: a valid existing `.lunet/v0.9.2/` install is reused without any network access.
+- **Idempotent**: a valid existing `.lunet/v0.18.2/` install is reused without any network access.
 
-Runtime binary path: `.lunet/v0.9.2/lunet-run`.
+Runtime binary path: `.lunet/v0.18.2/lunet-run`.
 
 Supported xmake entry points in this repo:
 
@@ -68,7 +68,7 @@ gh release list --repo lua-lunet/lunet
    (e.g. `scripts/lunet_fetch_release_v0.9.3.lua`).
 2. Update the scripts that reference the tag/install path
    (`scripts/lunet-env.sh`, `scripts/setup-lunet.sh`, and any CI wiring) to the new tag.
-3. Remove the old install: `rm -rf .lunet/<old-tag>` (e.g. `rm -rf .lunet/v0.9.2`).
+3. Remove the old install: `rm -rf .lunet/<old-tag>` (e.g. `rm -rf .lunet/v0.18.2`).
 4. `xmake run setup-lunet` to fetch and verify the new release.
 5. `xmake test` to validate.
 

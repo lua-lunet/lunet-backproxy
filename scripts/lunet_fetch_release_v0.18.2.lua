@@ -4,7 +4,7 @@
 --
 -- This file is a TEMPLATE: CI renders it per release as
 --   lunet_fetch_release_<tag>.lua
--- by substituting v0.9.2. Do not hand-edit rendered copies.
+-- by substituting v0.18.2. Do not hand-edit rendered copies.
 --
 -- Result layout (relative to the current working directory):
 --   .lunet/<tag>/lunet-run     (lunet-run.exe on Windows)
@@ -31,7 +31,7 @@
 -- certutil on Windows), tar (Windows 10+ ships bsdtar as tar.exe, which also
 -- reads .zip). Runs on Lua 5.1+ and LuaJIT.
 
-local RELEASE_TAG = "v0.9.2"
+local RELEASE_TAG = "v0.18.2"
 local REPO = "lua-lunet/lunet"
 
 local DEST = ".lunet/" .. RELEASE_TAG

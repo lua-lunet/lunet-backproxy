@@ -11,6 +11,7 @@ local driver_modules = {
 
 local driver_name = driver_modules[config.driver] or "lunet.sqlite3"
 local native = require(driver_name)
+local is_sqlite = driver_name == "lunet.sqlite3"
 
 local db = {}
 
@@ -18,13 +19,48 @@ local db = {}
 local pool = {}
 local pool_size = tonumber(os.getenv("DB_POOL_SIZE")) or 100
 
--- Expose native functions
-db.open = native.open
 db.close = native.close
+
+-- The 0.18 drivers changed parameter binding entry points:
+--   sqlite3: query_params/exec_params take (conn, sql, params_table)
+--            instead of varargs; open returns (rw, ro, err_table).
+--   postgres: query/exec take varargs directly (no *_params entry points).
+--   mysql:    query/exec are declared on strings; *_params entry points are
+--             kept here with varargs (V0.9 legacy varargs passthrough for
+--             the pooled demo paths).
+-- All adapter entry points here keep the internal varargs convention and
+-- errors are normalized to strings for HTTP error reporting.
+local function normalize_err(err)
+    if type(err) ~= "table" then
+        return err
+    end
+    if err.message then
+        return tostring(err.op and (err.op .. ": " .. err.message) or err.message)
+    end
+    return tostring(err)
+end
+
+local function varargs_table(...)
+    return { n = select("#", ...), select(1, ...) }
+end
+
+local function call_params(fn, conn, sql, ...)
+    if is_sqlite then
+        return fn(conn, sql, varargs_table(...))
+    end
+    return fn(conn, sql, ...)
+end
+
+function db.exec_params(conn, sql, ...)
+    return call_params(native.exec_params, conn, sql, ...)
+end
+
+function db.query_params(conn, sql, ...)
+    return call_params(native.query_params, conn, sql, ...)
+end
+
 db.query_raw = native.query
 db.exec_raw = native.exec
-db.query_params = native.query_params
-db.exec_params = native.exec_params
 
 function db.set_config(cfg)
     if not cfg then return end
@@ -33,10 +69,57 @@ function db.set_config(cfg)
     end
 end
 
+-- Option keys each driver accepts at open time; unknown or wrong-typed
+-- options fail loudly in the 0.18 drivers, so the shared config (which also
+-- carries mysql/postgres credentials) must be filtered per driver.
+-- sqlite additionally needs create="NORMAL": since 0.18 the raw open refuses
+-- to create a database file unless creation is explicitly requested.
+local driver_open_keys = {
+    sqlite   = { "path" },
+    sqlite3  = { "path" },
+    mysql    = { "host", "port", "user", "password", "database" },
+    postgres = { "host", "port", "user", "password", "database" },
+}
+
+local function driver_open_options()
+    local keys = driver_open_keys[config.driver] or driver_open_keys.sqlite
+    local opts = {}
+    for _, key in ipairs(keys) do
+        local value = config[key]
+        if value ~= nil then
+            opts[key] = value
+        end
+    end
+    if is_sqlite then
+        opts.create = "NORMAL"
+    end
+    return opts
+end
+
+-- The 0.18 sqlite driver returns (rw, ro, err) from open and reports errors
+-- as tables ({message, code, extended_code, op}); mysql/postgres keep the
+-- legacy (conn, err) shape with string errors. Adapt the sqlite shape to the
+-- internal single-connection convention: the rw handle serves reads and
+-- writes alike (reads dispatched to the dedicated rw worker), errors are
+-- normalized to strings for HTTP error reporting.
+local function native_open(options)
+    if is_sqlite then
+        local rw, _, err = native.open(options)
+        if not rw then
+            return nil,
+                (type(err) == "table" and err.message and (tostring(err.op or "sqlite") .. ": " .. tostring(err.message)))
+                    or tostring(err or "open failed")
+        end
+        return rw
+    end
+    return native.open(options)
+end
+
 -- Initialize connection pool
 function db.init_pool()
+    local options = driver_open_options()
     for i = 1, pool_size do
-        local conn, err = native.open(config)
+        local conn, err = native_open(options)
         if conn then
             table.insert(pool, conn)
         else
@@ -52,7 +135,7 @@ local function get_conn()
         return table.remove(pool, 1)
     end
     -- Pool empty, create new connection
-    return native.open(config)
+    return native_open(driver_open_options())
 end
 
 -- Return connection to pool
@@ -69,7 +152,7 @@ end
 
 -- Connection management (legacy - creates new connection)
 function db.connect()
-    return native.open(config)
+    return native_open(driver_open_options())
 end
 
 -- Normalize values for bind parameters (booleans bind as integers, as the
@@ -81,6 +164,8 @@ local function bindable(val)
     return val
 end
 
+-- Normalize a driver error to a string (see normalize_err above); the
+-- 0.18 sqlite driver returns structured tables here.
 -- Higher level query (handles connection and parameters).
 -- Since Lunet v0.5.0 all drivers bind parameters natively on every entry
 -- point (sqlite3_bind_* / mysql_stmt_bind_param / PQexecParams); manual
@@ -101,7 +186,7 @@ function db.query(sql, ...)
     release_conn(conn)
 
     if not result then
-        return nil, query_err or "query failed"
+        return nil, normalize_err(query_err) or "query failed"
     end
 
     return result
@@ -123,7 +208,7 @@ function db.exec(sql, ...)
     release_conn(conn)
 
     if not result then
-        return nil, exec_err or "exec failed"
+        return nil, normalize_err(exec_err) or "exec failed"
     end
 
     return result

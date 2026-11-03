@@ -1,6 +1,6 @@
 # Lunet Backproxy
 
-[![Lunet v0.9.2](https://img.shields.io/badge/Lunet-v0.9.2-blue?logo=lua&logoColor=white)](https://github.com/lua-lunet/lunet/releases/tag/v0.9.2)
+[![Lunet v0.18.2](https://img.shields.io/badge/Lunet-v0.18.2-blue?logo=lua&logoColor=white)](https://github.com/lua-lunet/lunet/releases/tag/v0.18.2)
 
 Secure reverse outbound proxy for DMZ topologies.
 
@@ -94,13 +94,13 @@ sequenceDiagram
 
 ## Runtime policy
 
-This repo is pinned to Lunet release tag `v0.9.2`, consumed as a verified binary release.
+This repo is pinned to Lunet release tag `v0.18.2`, consumed as a verified binary release.
 
-- `xmake run setup-lunet` fetches the official release via `scripts/lunet_fetch_release_v0.9.2.lua`
+- `xmake run setup-lunet` fetches the official release via `scripts/lunet_fetch_release_v0.18.2.lua`
 - The fetcher verifies the archive SHA-256 against GitHub release metadata before extraction and fails closed on mismatch
-- The runtime is staged idempotently under `.lunet/v0.9.2/` (`lunet-run`, `lunet.so`, `lunet/*.so`, `types/`, docs)
+- The runtime is staged idempotently under `.lunet/v0.18.2/` (`lunet-run`, `lunet.so`, `lunet/*.so`, `types/`, docs)
 - `lunet-run` self-resolves `require("lunet")` / `lunet.*` modules; no `LUA_CPATH` setup is needed for the fetched runtime
-- `.lunet/v0.9.2/types/` ships LuaCATS (`*.lua`) and Teal (`*.d.tl`) declarations for editor/typed-Lua support; point your editor workspace library there (app code stays plain Lua by design)
+- `.lunet/v0.18.2/types/` ships LuaCATS (`*.lua`) and Teal (`*.d.tl`) declarations for editor/typed-Lua support; point your editor workspace library there (app code stays plain Lua by design)
 - No local sibling `../lunet` checkout is required
 - To intentionally use an instrumented or custom build, set `LUNET_BIN=/path/to/lunet-run` (add `LUA_CPATH` if that layout needs it); the `stress-compare` flow is unchanged (`INSTRUMENTED_LUNET_BIN` etc.)
 

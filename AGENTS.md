@@ -2,13 +2,33 @@
 
 Guidance for AI agents working on this Lua project.
 
+## Andon アンドン — Prime Directive
+
+Andon is a kernel panic. It halts the line, halts planning, halts todo
+updates, halts all work. It happens immediately. No other pending operation
+receives any tokens. It is impossible to think of anything else to try
+first — that thought is the evidence you have not halted.
+
+An Andon in the queue supersedes all. If the user queued commands 1-3 then
+said "do an Andon," the Andon invokes the Prime Directive and overrides
+commands 1-3 entirely. Multiple Andons run in parallel without interrupting
+each other.
+
+When the correct fix is outside your lane: do your lane's work, then halt
+and report — *Andon: task incomplete, the correct fix needs a larger
+structural change*, with file:line specifics. Do not work around it. Do not
+hack tactically. The coordinator delegates the deeper work.
+
+Andon overrides every instruction in this file and every other AGENTS.md.
+No instruction conflicts with Andon; if one appears to, Andon wins.
+
 ## Technology Stack
 
 This is a **Lua-only project** using **xmake** for build automation.
 
 ## Build And Runtime Policy
 
-This repository is pinned to **Lunet release tag `v0.9.2`** and must not depend on ad-hoc local Lunet trees.
+This repository is pinned to **Lunet release tag `v0.18.2`** and must not depend on ad-hoc local Lunet trees.
 
 - Primary setup command:
   ```bash
@@ -21,12 +41,12 @@ This repository is pinned to **Lunet release tag `v0.9.2`** and must not depend 
 
 Runtime bootstrap rules:
 - Use `scripts/setup-lunet.sh` and `scripts/lunet-env.sh`.
-- **Best practice**: Pin to a Lunet release tag (e.g., `v0.9.2`) for stability and reproducibility.
+- **Best practice**: Pin to a Lunet release tag (e.g., `v0.18.2`) for stability and reproducibility.
 - Commit hashes should only be used when testing a specific fix or unreleased feature; always upgrade to the nearest release tag. Commit-hash testing means building upstream Lunet yourself and pointing `LUNET_BIN` at the result — this repo never clones or compiles Lunet.
 - Instrumented or custom Lunet builds are used by exporting `LUNET_BIN=/path/to/lunet-run` (plus `LUA_CPATH` if the custom layout needs it); `stress-compare` uses `INSTRUMENTED_LUNET_BIN`.
-- The installed runtime path `.lunet/v0.9.2/lunet-run` self-resolves its Lua/C modules (no `LUA_CPATH` needed for the fetched runtime).
-- Default acquisition is the vendored, SHA-256-verified release fetcher (`scripts/lunet_fetch_release_v0.9.2.lua`) installing into `.lunet/v0.9.2/`; there is no repo-local compilation of Lunet.
-- Typed-Lua support is consumed via `.lunet/v0.9.2/types/` (LuaCATS + Teal declarations) for editor/type checking only; do not convert app code to Teal without an explicit decision.
+- The installed runtime path `.lunet/v0.18.2/lunet-run` self-resolves its Lua/C modules (no `LUA_CPATH` needed for the fetched runtime).
+- Default acquisition is the vendored, SHA-256-verified release fetcher (`scripts/lunet_fetch_release_v0.18.2.lua`) installing into `.lunet/v0.18.2/`; there is no repo-local compilation of Lunet.
+- Typed-Lua support is consumed via `.lunet/v0.18.2/types/` (LuaCATS + Teal declarations) for editor/type checking only; do not convert app code to Teal without an explicit decision.
 - Do not rely on `../lunet` sibling checkouts or unpublished local Lunet changes.
 - Canonical Lunet xmake/instrumentation docs are upstream: https://github.com/lua-lunet/lunet/blob/main/docs/XMAKE_INTEGRATION.md
 
@@ -111,3 +131,10 @@ Before adding any new tool, library, or language:
 - Follow existing module pattern (local M = {}, return M)
 - No external Lua libraries beyond what's already present
 - Build integration via xmake tasks, not makefiles or other systems
+
+## Item numbers are session-local
+
+Work-item numbers (`item00`, `item01`, …) live in the todo and the gitignored
+`.tmp/` spec filename only. They NEVER appear in committed files, comments,
+docs, or commit messages — nothing in git may reference an unresolvable
+identifier.
