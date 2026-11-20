@@ -8,8 +8,13 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   package:
+    timeout-minutes: 30
     name: package-${{ matrix.name }}
     runs-on: ${{ matrix.runs_on }}
     strategy:
@@ -78,6 +83,7 @@ jobs:
           path: ${{ matrix.archive }}
 
   publish:
+    timeout-minutes: 10
     name: publish-release
     if: startsWith(github.ref, 'refs/tags/')
     needs: [package]
