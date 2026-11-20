@@ -9,6 +9,7 @@ on:
 
 jobs:
   test:
+    timeout-minutes: 20
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.runs_on }}
     strategy:
@@ -60,6 +61,7 @@ jobs:
           xmake test
 
   compose-e2e:
+    timeout-minutes: 25
     name: compose-e2e-${{ matrix.name }}
     runs-on: ${{ matrix.runs_on }}
     strategy:
